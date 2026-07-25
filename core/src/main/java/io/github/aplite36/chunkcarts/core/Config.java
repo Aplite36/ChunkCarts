@@ -1,7 +1,9 @@
 package io.github.aplite36.chunkcarts.core;
 
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.EnumSet;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
 
@@ -63,7 +65,126 @@ public record Config(
      * thresholds and the enforcement flag becomes theatre.
      */
     public Resolution resolve() {
-        throw new UnsupportedOperationException("step 3");
+        List<String> warnings = new ArrayList<>();
+        Builder out = toBuilder();
+
+        // The cart-type table is not a clamp: TNT, COMMAND_BLOCK and SPAWNER are refused whatever
+        // the file says, in both modes. Gate 2 checks NEVER_PERMITTED as well, so this only keeps
+        // the resolved config honest about what it permits.
+        Set<CartType> permitted = new LinkedHashSet<>(allowedCartTypes);
+        if (permitted.removeAll(NEVER_PERMITTED)) {
+            warnings.add("cart-types: tnt, command_block and spawner cannot be enabled; ignoring.");
+        }
+        out.allowedCartTypes(permitted);
+
+        if (enforcement == EnforcementMode.PERMISSIVE) {
+            warnings.add("ChunkCarts is in PERMISSIVE mode — minecarts CAN be used as chunk "
+                    + "loaders. This is not the default. See config.yml.");
+            return new Resolution(out.build(), List.copyOf(warnings));
+        }
+
+        // ---- STRICT ceilings ----------------------------------------------------------------
+        if (progressSlackChunks > STRICT_MAX_PROGRESS_SLACK_CHUNKS) {
+            warnings.add(clamped("progress-slack-chunks", progressSlackChunks,
+                    STRICT_MAX_PROGRESS_SLACK_CHUNKS));
+            out.progressSlackChunks(STRICT_MAX_PROGRESS_SLACK_CHUNKS);
+        }
+        if (journeyBudgetChunks > STRICT_MAX_JOURNEY_BUDGET_CHUNKS) {
+            warnings.add(clamped("journey-budget-chunks", journeyBudgetChunks,
+                    STRICT_MAX_JOURNEY_BUDGET_CHUNKS));
+            out.journeyBudgetChunks(STRICT_MAX_JOURNEY_BUDGET_CHUNKS);
+        }
+        if (regionRadius > STRICT_MAX_REGION_RADIUS) {
+            warnings.add(clamped("region-radius", regionRadius, STRICT_MAX_REGION_RADIUS));
+            out.regionRadius(STRICT_MAX_REGION_RADIUS);
+        }
+        if (maxConcurrentJourneys > STRICT_MAX_CONCURRENT_JOURNEYS) {
+            warnings.add(clamped("max-concurrent-journeys", maxConcurrentJourneys,
+                    STRICT_MAX_CONCURRENT_JOURNEYS));
+            out.maxConcurrentJourneys(STRICT_MAX_CONCURRENT_JOURNEYS);
+        }
+        if (pollIntervalTicks > STRICT_MAX_POLL_INTERVAL_TICKS) {
+            warnings.add(clamped("poll-interval-ticks", pollIntervalTicks,
+                    STRICT_MAX_POLL_INTERVAL_TICKS));
+            out.pollIntervalTicks(STRICT_MAX_POLL_INTERVAL_TICKS);
+        }
+        if (pauseTolerance.compareTo(STRICT_MAX_PAUSE_TOLERANCE) > 0) {
+            warnings.add(clamped("pause-tolerance", pauseTolerance, STRICT_MAX_PAUSE_TOLERANCE));
+            out.pauseTolerance(STRICT_MAX_PAUSE_TOLERANCE);
+        }
+        if (arrivalHoldTicks > STRICT_MAX_ARRIVAL_HOLD_TICKS) {
+            warnings.add(clamped("arrival-hold-ticks", arrivalHoldTicks,
+                    STRICT_MAX_ARRIVAL_HOLD_TICKS));
+            out.arrivalHoldTicks(STRICT_MAX_ARRIVAL_HOLD_TICKS);
+        }
+
+        // ---- STRICT floors ------------------------------------------------------------------
+        if (minSpeed < STRICT_MIN_SPEED_FLOOR) {
+            warnings.add(raised("min-speed", minSpeed, STRICT_MIN_SPEED_FLOOR));
+            out.minSpeed(STRICT_MIN_SPEED_FLOOR);
+        }
+        // Only under NONE. Elsewhere the token requirement already bounds repetition, so the floor
+        // would be gratuitous friction.
+        if (departureRequirement == DepartureRequirement.NONE
+                && journeyCooldown.compareTo(STRICT_MIN_COOLDOWN_UNDER_NONE) < 0) {
+            warnings.add(raised("journey-cooldown", journeyCooldown, STRICT_MIN_COOLDOWN_UNDER_NONE)
+                    + " The progress rule stops loops; only the cooldown stops repetition.");
+            out.journeyCooldown(STRICT_MIN_COOLDOWN_UNDER_NONE);
+        }
+
+        // ---- Ignored outright, not clamped --------------------------------------------------
+        if (!unloadHold.isZero()) {
+            warnings.add("ChunkCarts: unload-hold is set but ignored in STRICT mode. Holding a "
+                    + "station for minutes is chunk loading. Use /forceload on the station chunk "
+                    + "instead, or switch to enforcement: PERMISSIVE.");
+            out.unloadHold(Duration.ZERO);
+        }
+
+        return new Resolution(out.build(), List.copyOf(warnings));
+    }
+
+    private static String clamped(String key, Object was, Object now) {
+        return "ChunkCarts: " + key + " is " + was + ", above the STRICT maximum of " + now
+                + ". Clamped.";
+    }
+
+    private static String raised(String key, Object was, Object now) {
+        return "ChunkCarts: " + key + " is " + was + ", below the STRICT minimum of " + now
+                + ". Raised.";
+    }
+
+    /** A builder pre-loaded with this config's values, for producing an adjusted copy. */
+    public Builder toBuilder() {
+        return new Builder()
+                .enforcement(enforcement)
+                .departureRequirement(departureRequirement)
+                .journeyCooldown(journeyCooldown)
+                .journeyBudgetChunks(journeyBudgetChunks)
+                .progressSlackChunks(progressSlackChunks)
+                .regionRadius(regionRadius)
+                .maxConcurrentJourneys(maxConcurrentJourneys)
+                .pollIntervalTicks(pollIntervalTicks)
+                .minSpeed(minSpeed)
+                .minTps(minTps)
+                .pauseTolerance(pauseTolerance)
+                .arrivalHoldTicks(arrivalHoldTicks)
+                .unloadHold(unloadHold)
+                .allowedCartTypes(allowedCartTypes)
+                .worlds(worldsMode, worldList)
+                .strandedLog(strandedLog)
+                .notifyLastInteractor(notifyLastInteractor)
+                .metrics(metrics);
+    }
+
+    /** Whether this world may be travelled in (SPEC §4 gate 1, §6 {@code worlds}). */
+    public boolean isWorldEnabled(WorldId world) {
+        boolean listed = worldList.contains(world.value());
+        return worldsMode == WorldsMode.ALLOWLIST ? listed : !listed;
+    }
+
+    /** Whether this cart type may depart. NEVER_PERMITTED wins over the config, always. */
+    public boolean isCartTypeAllowed(CartType type) {
+        return !NEVER_PERMITTED.contains(type) && allowedCartTypes.contains(type);
     }
 
     /**

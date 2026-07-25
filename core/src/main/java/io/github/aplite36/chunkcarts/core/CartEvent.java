@@ -30,5 +30,10 @@ public enum CartEvent {
      * NOT interaction. A player is merely nearby. This grants a token through presence (§3.3)
      * but must never waive the cooldown, or an AFK player beside a dispenser cycles carts forever.
      */
-    PLAYER_NEARBY
+    PLAYER_NEARBY;
+
+    /** Whether this event waives the cooldown for exactly one dispatch (SPEC §4.1). */
+    public boolean isInteraction() {
+        return this == RIGHT_CLICK || this == INVENTORY_OPEN || this == PLACEMENT;
+    }
 }
