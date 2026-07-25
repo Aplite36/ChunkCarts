@@ -1,0 +1,127 @@
+package io.github.aplite36.chunkcarts.core;
+
+import io.github.aplite36.chunkcarts.core.fake.FakeCart;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+
+import java.time.Duration;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
+/**
+ * SPEC §3.5 clamps and §6 enforcement.
+ *
+ * <p>Without clamps, permissive behaviour exists implicitly via extreme thresholds and the
+ * enforcement flag becomes theatre. That is the whole point of this file.
+ */
+@DisplayName("§3.5 clamps and §6 enforcement")
+class EnforcementModeTest extends EngineTest {
+
+    private Config.Resolution resolveStrict(Config.Builder builder) {
+        return builder.enforcement(EnforcementMode.STRICT).build().resolve();
+    }
+
+    @Test
+    @DisplayName("PERMISSIVE mode bypasses the progress rule")
+    void permissiveModeBypassesProgressRule() {
+        cfg.enforcement(EnforcementMode.PERMISSIVE).progressSlackChunks(16);
+        FakeCart cart = FakeCart.at(OVERWORLD, 0, 0);
+        departWithToken(cart);
+
+        travelLoop(cart, 4, 10);
+
+        assertNotEquals(TerminationReason.SLACK_EXHAUSTED,
+                engine().lastTermination(cart.id()).orElse(null),
+                "in PERMISSIVE, minecarts CAN be used as chunk loaders — that is the contract");
+    }
+
+    @Test
+    @DisplayName("STRICT clamps excessive slack")
+    void strictModeClampsExcessiveSlack() {
+        var resolved = resolveStrict(Config.defaults().progressSlackChunks(5000));
+
+        assertEquals(Config.STRICT_MAX_PROGRESS_SLACK_CHUNKS, resolved.config().progressSlackChunks());
+        assertTrue(resolved.warnings().stream().anyMatch(w -> w.contains("progress-slack-chunks")),
+                "clamping must warn, or the operator never learns their setting was overruled");
+    }
+
+    @Test
+    @DisplayName("STRICT clamps excessive budget")
+    void strictModeClampsExcessiveBudget() {
+        var resolved = resolveStrict(Config.defaults().journeyBudgetChunks(999_999));
+
+        assertEquals(Config.STRICT_MAX_JOURNEY_BUDGET_CHUNKS, resolved.config().journeyBudgetChunks());
+        assertTrue(resolved.warnings().stream().anyMatch(w -> w.contains("journey-budget-chunks")));
+    }
+
+    @Test
+    @DisplayName("STRICT clamps an excessive arrival hold")
+    void strictModeClampsExcessiveArrivalHold() {
+        var resolved = resolveStrict(Config.defaults().arrivalHoldTicks(20_000));
+
+        assertEquals(Config.STRICT_MAX_ARRIVAL_HOLD_TICKS, resolved.config().arrivalHoldTicks());
+        assertTrue(resolved.warnings().stream().anyMatch(w -> w.contains("arrival-hold-ticks")));
+    }
+
+    @Test
+    @DisplayName("STRICT clamps an excessive pause tolerance")
+    void strictModeClampsExcessivePauseTolerance() {
+        // A long tolerance re-opens the stationary-cart hole.
+        var resolved = resolveStrict(Config.defaults().pauseTolerance(Duration.ofMinutes(30)));
+
+        assertEquals(Config.STRICT_MAX_PAUSE_TOLERANCE, resolved.config().pauseTolerance());
+        assertTrue(resolved.warnings().stream().anyMatch(w -> w.contains("pause-tolerance")));
+    }
+
+    @Test
+    @DisplayName("STRICT raises a zero min-speed to the floor")
+    void strictModeRaisesZeroMinSpeedToFloor() {
+        // At 0, a stationary cart on a rail satisfies the departure gate, departs, and holds its
+        // region while never entering a new chunk.
+        var resolved = resolveStrict(Config.defaults().minSpeed(0.0));
+
+        assertEquals(Config.STRICT_MIN_SPEED_FLOOR, resolved.config().minSpeed(), 1e-9);
+        assertTrue(resolved.warnings().stream().anyMatch(w -> w.contains("min-speed")));
+    }
+
+    @Test
+    @DisplayName("STRICT enforces the cooldown floor under departure-requirement NONE")
+    void strictModeEnforcesCooldownFloorUnderNoneRequirement() {
+        // The progress rule stops loops; only the cooldown stops repetition. With neither, a
+        // dispenser can launch carts down a straight line continuously and keep a corridor loaded.
+        var resolved = resolveStrict(Config.defaults()
+                .departureRequirement(DepartureRequirement.NONE)
+                .journeyCooldown(Duration.ZERO));
+
+        assertEquals(Config.STRICT_MIN_COOLDOWN_UNDER_NONE, resolved.config().journeyCooldown());
+        assertTrue(resolved.warnings().stream().anyMatch(w -> w.contains("journey-cooldown")));
+    }
+
+    @Test
+    @DisplayName("the cooldown floor does not apply under PLAYER_SEEN")
+    void cooldownFloorNotAppliedUnderPlayerSeen() {
+        // Under PLAYER_SEEN the token requirement already bounds repetition, so the floor would be
+        // gratuitous friction.
+        var resolved = resolveStrict(Config.defaults()
+                .departureRequirement(DepartureRequirement.PLAYER_SEEN)
+                .journeyCooldown(Duration.ofSeconds(5)));
+
+        assertEquals(Duration.ofSeconds(5), resolved.config().journeyCooldown());
+        assertTrue(resolved.warnings().stream().noneMatch(w -> w.contains("journey-cooldown")));
+    }
+
+    @Test
+    @DisplayName("PERMISSIVE mode emits a startup warning")
+    void permissiveModeEmitsStartupWarning() {
+        cfg.enforcement(EnforcementMode.PERMISSIVE);
+
+        var warnings = engine().startupWarnings();
+
+        assertTrue(warnings.stream().anyMatch(w -> w.contains("PERMISSIVE")),
+                "on every startup, not just the first");
+        assertTrue(warnings.stream().anyMatch(w -> w.toLowerCase().contains("chunk load")),
+                "the warning must say plainly what the mode allows");
+    }
+}

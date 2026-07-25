@@ -1,4 +1,4 @@
-package io.github.aplite36.chunkcarts.core;
+package io.github.aplite36.chunkcarts.core.platform;
 
 /**
  * Schedules the travel loop (SPEC §5).

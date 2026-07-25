@@ -1,4 +1,6 @@
-package io.github.aplite36.chunkcarts.core;
+package io.github.aplite36.chunkcarts.core.platform;
+
+import io.github.aplite36.chunkcarts.core.WorldId;
 
 import java.util.concurrent.CompletableFuture;
 

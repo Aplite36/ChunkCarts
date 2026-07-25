@@ -1,4 +1,7 @@
-package io.github.aplite36.chunkcarts.core;
+package io.github.aplite36.chunkcarts.core.platform;
+
+import io.github.aplite36.chunkcarts.core.CartType;
+import io.github.aplite36.chunkcarts.core.WorldId;
 
 import java.util.Optional;
 import java.util.UUID;
@@ -27,6 +30,16 @@ public interface CartView {
     double velocity();
 
     CartType type();
+
+    /**
+     * Total item count currently inside this cart, or 0 for a type that holds nothing.
+     *
+     * <p>Required by the §8 unload-hold completion test, which holds while the cluster's total is
+     * strictly <em>decreasing</em>. Not listed in §1.1's platform surface — the omission only
+     * surfaces when you try to write the arrival-hold tests, since "are items still draining"
+     * cannot be answered from position and velocity alone.
+     */
+    int itemCount();
 
     /**
      * The persisted journey state, or empty if the cart carries none. First byte is the schema
