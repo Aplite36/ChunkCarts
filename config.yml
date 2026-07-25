@@ -1,0 +1,330 @@
+# ═══════════════════════════════════════════════════════════════════════════
+#  ChunkCarts
+#
+#  Minecarts load chunks while travelling, so you can send items across long
+#  distances. Safe by default: closed and looping tracks stop loading
+#  automatically, so carts cannot be turned into chunk loaders.
+#
+#  Don't want to read all this? The defaults are the safe, recommended
+#  settings. You can leave this file alone.
+#
+#  Docs:  https://github.com/<user>/ChunkCarts
+#  Bugs:  https://github.com/<user>/ChunkCarts/issues
+# ═══════════════════════════════════════════════════════════════════════════
+
+# Internal. Used to migrate your settings if a future release renames a key.
+# Don't change this by hand.
+config-version: 1
+
+
+# ───────────────────────────────────────────────────────────────────────────
+#  ENFORCEMENT
+# ───────────────────────────────────────────────────────────────────────────
+
+# The master switch for the anti-abuse rules.
+#
+#   STRICT      Loop detection, travel budget, and departure tokens are all
+#               enforced. A cart on a closed or looping track stops loading
+#               chunks automatically. Cannot be used as a chunk loader.
+#               [default]
+#
+#   PERMISSIVE  All of the above is bypassed. Any moving minecart loads
+#               chunks for as long as it keeps moving.
+#
+#               >>> In PERMISSIVE mode, minecarts CAN be used as chunk
+#               >>> loaders. A player can park a cart on a small loop of
+#               >>> powered rail and permanently load a farm. Only use this
+#               >>> if you trust every player on your server.
+#
+#               A warning is printed on every startup in this mode.
+#               Also unlocks unload-hold, further down.
+enforcement: STRICT
+
+
+# ───────────────────────────────────────────────────────────────────────────
+#  WHO CAN SEND A CART
+# ───────────────────────────────────────────────────────────────────────────
+
+# What a cart must satisfy before it is allowed to begin a journey.
+#
+#   PLAYER_SEEN    The cart must have been in a chunk loaded by a real player
+#                  since its last journey. In practice: you load the cart at
+#                  your station and send it, or someone at the far end
+#                  unloads it and sends it back. [default]
+#
+#                  This is what prevents unattended cycling. A rail line
+#                  cannot run itself while nobody is around.
+#
+#   PLAYER_ONLINE  Any cart may depart as long as at least one player is
+#                  online anywhere on the server. Your rail network runs
+#                  while the server is populated and goes completely quiet
+#                  overnight. A reasonable middle ground, and the right
+#                  choice if you want automated multi-leg relay routes.
+#
+#   NONE           Any qualifying cart may depart. Fully automatic shuttles
+#                  with nobody present. journey-cooldown becomes your only
+#                  limit, so it is enforced more strictly here (see below).
+departure-requirement: PLAYER_SEEN
+
+# Minimum time between journeys for the same cart, measured from when the
+# LAST JOURNEY STARTED (not when it finished). Measuring from the start makes
+# this a true rate limit and avoids penalising long journeys twice.
+#
+# This is WAIVED if a player has interacted with the cart since its last
+# journey began — right-clicked it, opened it, or placed it. So "I stopped
+# the cart, topped it up, and sent it off again" just works.
+#
+# Hoppers filling the cart and dispensers launching it do NOT count as
+# interaction, and neither does a player merely standing nearby. That's
+# deliberate: it's what stops an AFK player next to an automatic dispenser
+# from cycling a cart forever.
+#
+# Under departure-requirement: NONE in STRICT mode, this is forced to a
+# minimum of 60s. Without a floor, a dispenser could launch carts down a
+# line continuously and keep the whole corridor loaded.
+journey-cooldown: 10m
+
+
+# ───────────────────────────────────────────────────────────────────────────
+#  TRAVEL LIMITS
+# ───────────────────────────────────────────────────────────────────────────
+
+# Maximum chunks a single journey may load in total.
+#
+# Only chunks ChunkCarts actually loads count against this — passing through
+# terrain a player is already loading is free.
+#
+# 256 chunks is roughly 4000 blocks of straight-line travel, so a 2000-block
+# route has about double the headroom it needs. If you run genuinely huge
+# rail lines and see BUDGET_EXHAUSTED in your log, raise this.
+#
+# This is a backstop, not the main protection. Loop detection is.
+# Capped at 1024 in STRICT mode.
+journey-budget-chunks: 256
+
+# ── THIS IS THE LOOP DETECTOR ──
+#
+# How far a cart may travel without getting further from where it started,
+# before it stops loading chunks.
+#
+# A cart on a closed loop reaches its furthest point on the first lap and can
+# never beat it, so it always runs out of slack and stops. A cart on a real
+# journey gets further from home almost every chunk and travels indefinitely.
+#
+# Slack exists because real track curves around hills and temporarily doubles
+# back. If you have very winding routes that stop early, raise this a little.
+# Lowering it kills loops faster but risks cutting off legitimate track.
+#
+# 16 chunks is about 256 blocks of loop travel — a few seconds.
+# Capped at 64 in STRICT mode.
+progress-slack-chunks: 16
+
+
+# ───────────────────────────────────────────────────────────────────────────
+#  PERFORMANCE
+# ───────────────────────────────────────────────────────────────────────────
+
+# How many chunks around each travelling cart to keep loaded.
+#
+#   1  = 3x3  =  9 chunks  [default, recommended]
+#   2  = 5x5  = 25 chunks
+#
+# 1 is enough. All eight neighbouring chunks are held, so whichever way the
+# track turns, the next chunk is already loaded. Raising this nearly triples
+# the cost per cart for no benefit at normal minecart speeds.
+# Capped at 2 in STRICT mode.
+region-radius: 1
+
+# Maximum journeys running at once, server-wide. Extra departures are refused
+# (and refusing costs the cart nothing — it keeps its token for next time).
+#
+# Carts that are paused mid-route or being held at their destination still
+# count, because they are still holding chunks.
+#
+# At region-radius 1 this default caps ChunkCarts at 144 loaded chunks. For
+# comparison, one player at simulation distance 10 loads over 400. Raise it
+# freely if you have a lot of rail and headroom.
+# Capped at 64 in STRICT mode.
+max-concurrent-journeys: 16
+
+# How often (in ticks) travelling carts are checked.
+#
+# A vanilla minecart moves 0.4 blocks per tick, so it takes at least 40 ticks
+# to cross a chunk. 10 gives four checks per chunk, which is plenty.
+#
+# >>> If you run a plugin that increases minecart speed (TrainCarts and
+# >>> similar), LOWER this. A cart moving fast enough to cross the loaded
+# >>> region between two checks will strand itself.
+#
+# ChunkCarts also lowers this automatically if it observes carts moving
+# faster than vanilla. Capped at 20 in STRICT mode.
+poll-interval-ticks: 10
+
+# Journeys will not START while server performance is below this. Journeys
+# already in progress are never interrupted — that would strand carts
+# mid-route. Set to 0 to disable this check.
+#
+# Measured from ChunkCarts' own scheduling drift rather than a server TPS
+# API, so it behaves the same on Paper, Fabric, NeoForge and Folia.
+min-tps: 18.0
+
+
+# ───────────────────────────────────────────────────────────────────────────
+#  STOPPING AND STARTING
+# ───────────────────────────────────────────────────────────────────────────
+
+# How long a cart may stand still mid-route before its journey is considered
+# over.
+#
+# Carts legitimately stop for a moment: sorting junctions, signal stops,
+# labouring over a hill, waiting behind a detector rail. While a cart is
+# paused, ChunkCarts KEEPS ITS CHUNKS LOADED and preserves the journey — if
+# it starts moving again it simply carries on. It does not count as a new
+# departure, so it needs no token and ignores the cooldown.
+#
+# That's not just convenience: a cart stopped at a sorting station needs its
+# chunk loaded for the sorter to push it onward. Releasing immediately would
+# unload the very redstone meant to restart it.
+#
+# If the cart never restarts, the journey ends when this elapses. Raise it if
+# you have stations with long dwell times. 15s covers ordinary junctions
+# comfortably. Capped at 30s in STRICT mode.
+pause-tolerance: 15s
+
+# How long (in ticks) to keep the destination loaded once a cart has arrived
+# and settled. 60 ticks = 3 seconds.
+#
+# This ALWAYS applies, in every mode, including when unload-hold is 0. It is
+# settle time: enough for the cart to come to rest and for a detector rail or
+# station redstone to fire and shunt it onto a siding.
+#
+# It is NOT an unloading window — see unload-hold below.
+# Capped at 200 ticks in STRICT mode.
+arrival-hold-ticks: 60
+
+# Extend the hold above so hoppers can actually empty an arriving cart.
+# 0 disables (default).
+#
+# >>> REQUIRES enforcement: PERMISSIVE. In STRICT mode this is ignored and a
+# >>> warning is logged on startup.
+#
+# Why: one hopper pulls about 2.5 items/sec, and only one hopper can sit
+# under a stationary cart. A full chest minecart therefore takes roughly
+# 11 MINUTES to drain. Holding a station that long, repeatedly, is chunk
+# loading — the exact thing STRICT mode exists to prevent. There is no value
+# here that is both long enough to be useful and safe in STRICT.
+#
+# On a STRICT server, use vanilla /forceload on the station chunk instead.
+# That's one chunk, permanently, entirely under your control, and it doesn't
+# affect ChunkCarts' guarantees at all. For most people it's the better tool
+# even on a permissive server.
+#
+# When set, the hold ends when the carts' combined contents stop going DOWN
+# — specifically, 10 seconds with no net decrease — or when this timeout
+# expires, whichever comes first.
+#
+# Note that it counts a DECREASE, not item movement. A hopper minecart parked
+# under a farm has items pouring in constantly, and that must not keep the
+# station loaded forever.
+#
+# Carts travelling together count as ONE journey, so they get ONE hold, and
+# this timeout is the total for all of them rather than per cart. Five full
+# chest carts take the best part of an hour to drain, so in that case the
+# timeout is what ends it, not the contents. A few minutes is a sensible
+# ceiling.
+#
+# If both this and arrival-hold-ticks are set, the longer of the two applies
+# — they don't add together.
+unload-hold: 0s
+
+# Speed (blocks per tick) below which a cart counts as stopped. Vanilla top
+# speed is 0.4, so this default is about an eighth of full pelt.
+#
+# Too low: a barely-creeping cart counts as travelling.
+# Too high: carts labouring up an incline get treated as having arrived.
+#
+# Forced to at least 0.01 in STRICT mode. At 0, a cart sitting still on a
+# rail would qualify to depart and then hold chunks without going anywhere.
+min-speed: 0.05
+
+
+# ───────────────────────────────────────────────────────────────────────────
+#  CART TYPES
+# ───────────────────────────────────────────────────────────────────────────
+
+# Which kinds of minecart may begin a journey.
+cart-types:
+  normal: true
+  chest: true
+  hopper: true
+
+  # Furnace carts propel themselves as long as they have fuel, so they are
+  # the only cart that can run a loop forever with no redstone at all. Loop
+  # detection handles them, but disable them here if you'd rather not.
+  furnace: true
+
+  # These cannot be enabled. Primed TNT arriving in unattended terrain, and
+  # unattended command execution, are not things this plugin will help with.
+  tnt: false
+  command_block: false
+
+
+# ───────────────────────────────────────────────────────────────────────────
+#  WORLDS
+# ───────────────────────────────────────────────────────────────────────────
+
+worlds:
+  # BLOCKLIST  ChunkCarts works everywhere except the worlds listed below.
+  #            An empty list means "everywhere". [default]
+  #
+  # ALLOWLIST  ChunkCarts works ONLY in the worlds listed below.
+  #            Careful: an empty list here disables the plugin entirely.
+  mode: BLOCKLIST
+  list: []
+  # Example — turn it off in creative and minigame worlds:
+  # list:
+  #   - creative
+  #   - minigames
+
+
+# ───────────────────────────────────────────────────────────────────────────
+#  STRANDED CARTS
+# ───────────────────────────────────────────────────────────────────────────
+
+# A cart whose journey ends early stops where it is, in unloaded terrain. It
+# is not deleted and nothing in it is lost — it just sits there until someone
+# goes to it.
+stranded:
+  # Log the world, coordinates, cart type, and the REASON the journey ended.
+  #
+  # Keep this on. The reason is what tells you whether something needs
+  # attention or the plugin is working correctly:
+  #
+  #   BUDGET_EXHAUSTED   long legitimate route — consider raising the budget
+  #   SLACK_EXHAUSTED    a loop was detected and stopped — working as intended
+  #   STALLED            the cart got stuck, or rattled inside one chunk
+  #   ARRIVED            reached its destination normally
+  #   UNGENERATED_CHUNK  the track heads into unexplored terrain
+  #   LEFT_RAILS         the cart derailed
+  log: true
+
+  # Message the last player who interacted with the cart, telling them where
+  # it stopped.
+  #
+  # Off by default. "Last interactor" is not "owner" — anyone who right-
+  # clicks a cart becomes the recorded interactor, so this can send your
+  # route's coordinates to someone who merely touched your cart. If the
+  # player is offline the message is dropped rather than saved for later.
+  notify-last-interactor: false
+
+
+# ───────────────────────────────────────────────────────────────────────────
+#  METRICS
+# ───────────────────────────────────────────────────────────────────────────
+
+# Send anonymous usage statistics to bStats: server software, game version,
+# player count, and which enforcement mode you're using.
+#
+# This is how it gets decided which game versions stay supported. No player
+# data, no world data, no IP addresses. Set to false to opt out.
+metrics: true

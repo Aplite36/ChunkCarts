@@ -1,0 +1,46 @@
+# Gradle
+.gradle/
+build/
+
+# Stonecutter generated subprojects
+versions/*/build/
+.stonecutter/
+
+# Minecraft dev runtime — never commit a test world
+run/
+runs/
+server.properties
+eula.txt
+logs/
+crash-reports/
+world/
+world_nether/
+world_the_end/
+# Built jars, but keep the Gradle wrapper
+*.jar
+!gradle/wrapper/gradle-wrapper.jar
+
+# IDE
+.idea/
+*.iml
+*.ipr
+*.iws
+.vscode/
+.settings/
+.classpath
+.project
+out/
+
+# Claude Code — kept out of the public repo entirely
+CLAUDE.md
+CLAUDE.local.md
+.claude/
+docs/SPEC.md
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Secrets — publishing tokens live in CI, never here
+*.env
+secrets.properties
