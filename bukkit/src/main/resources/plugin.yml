@@ -1,0 +1,14 @@
+name: ChunkCarts
+version: '${version}'
+main: io.github.aplite36.chunkcarts.bukkit.ChunkCartsPlugin
+description: Minecarts load chunks while travelling. Closed and looping tracks stop loading automatically.
+author: Aplite36
+website: https://github.com/Aplite36/ChunkCarts
+
+# The 1.21 API floor. Bukkit is forward-compatible at runtime, so one jar covers 1.21 -> 26.2.
+api-version: '1.21'
+
+# Folia is out of scope for v0.1 (SPEC §12) — its regionised tick loop means cross-region
+# ticket acquisition and genuinely concurrent state. Declared explicitly so Folia refuses
+# to load this rather than running it in a broken configuration.
+folia-supported: false
