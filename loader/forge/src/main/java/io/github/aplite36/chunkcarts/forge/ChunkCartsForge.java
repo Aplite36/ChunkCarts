@@ -15,7 +15,9 @@ import io.github.aplite36.chunkcarts.loader.LevelTicketBackend;
 import io.github.aplite36.chunkcarts.loader.LevelWorldQuery;
 import io.github.aplite36.chunkcarts.loader.SystemClock;
 import io.github.aplite36.chunkcarts.loader.TickScheduler;
+//? if >=1.21.5 {
 import net.minecraft.core.registries.Registries;
+//?}
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.Container;
@@ -25,6 +27,11 @@ import net.minecraft.world.entity.vehicle.minecart.AbstractMinecart;
 //?} else
 /*import net.minecraft.world.entity.vehicle.AbstractMinecart;*/
 import net.minecraft.world.item.MinecartItem;
+//? if <1.21.6 {
+/*import net.minecraftforge.common.MinecraftForge;
+import net.minecraftforge.eventbus.api.EventPriority;
+import net.minecraftforge.eventbus.api.IEventBus;
+*///?}
 import net.minecraftforge.event.RegisterCommandsEvent;
 import net.minecraftforge.event.TickEvent;
 import net.minecraftforge.event.entity.EntityJoinLevelEvent;
@@ -32,6 +39,7 @@ import net.minecraftforge.event.entity.EntityLeaveLevelEvent;
 import net.minecraftforge.event.entity.player.PlayerInteractEvent;
 import net.minecraftforge.event.server.ServerStartedEvent;
 import net.minecraftforge.event.server.ServerStoppingEvent;
+import net.minecraftforge.fml.ModContainer;
 import net.minecraftforge.fml.ModList;
 import net.minecraftforge.fml.common.Mod;
 import net.minecraftforge.fml.javafmlmod.FMLJavaModLoadingContext;
@@ -41,6 +49,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
@@ -111,41 +120,148 @@ public final class ChunkCartsForge implements ChunkCartsMod {
 
     private record PendingPlacement(UUID player, double x, double y, double z, long gameTime) {}
 
+    /**
+     * The two EventBus generations, side by side.
+     *
+     * <p>The seam is Forge 1.21.6 and it was measured, not guessed: every target's own
+     * {@code userdev} config.json names its EventBus build, and they run 6.2.8 → 6.2.33 up to
+     * 1.21.5 and 7.0-beta.10 → 7.0.5 from 1.21.6 on. Note that this does <em>not</em> line up with
+     * the vanilla seam below it: 1.21.5 needs {@code RegisterEvent}, because the ticket registry
+     * exists and is frozen there, but still has to reach it over EventBus 6. That one target is the
+     * reason for three branches rather than two.
+     *
+     * <p>On EventBus 6 every listener names its event class explicitly. The shorter
+     * {@code addListener(this::onEntityLoad)} overload exists, but it infers the event type from the
+     * consumer's generic signature and a method reference does not carry one, so it fails at
+     * registration time rather than at compile time — the exact silent-wiring failure §1.1 warns
+     * about, on the platform where it is hardest to notice.
+     */
     public ChunkCartsForge(FMLJavaModLoadingContext context) {
-        // From 1.21.5 the ticket type goes into a vanilla registry, and Forge freezes those before
-        // the server starts, so registration has to happen inside the window RegisterEvent opens.
-        // That event rides the mod BusGroup rather than the game bus, which is why the group is the
-        // one thing this constructor needs. Before 1.21.5 there is no ticket registry to be frozen
-        // out of, the type being a plain object, so it is built here instead.
-        //? if >=1.21.5 {
+        ChunkCartsCommand command = new ChunkCartsCommand(this);
+        registerTicketType(context);
+        wireGameEvents(command);
+        warnAboutRivals();
+    }
+
+    /**
+     * Puts the chunk ticket into the registry, in whichever window this version has for it.
+     *
+     * <p>Three branches for two independent seams that do not line up. From 1.21.5 the ticket type
+     * goes into a vanilla registry and Forge freezes those before the server starts, so registration
+     * has to happen inside the window {@code RegisterEvent} opens, on the mod bus rather than the
+     * game bus. Before 1.21.5 there is no ticket registry to be frozen out of — the type is a plain
+     * object — so it is simply built here. Crossing that is the EventBus seam at 1.21.6, which
+     * changes <em>how</em> a mod-bus listener is added. 1.21.5 is the one target that needs the new
+     * registry over the old bus.
+     */
+    private static void registerTicketType(FMLJavaModLoadingContext context) {
+        //? if >=1.21.6 {
         RegisterEvent.getBus(context.getModBusGroup()).addListener(event -> {
             if (event.getRegistryKey().equals(Registries.TICKET_TYPE)) {
                 JourneyTicket.register();
             }
         });
-        //?} else
+        //?} elif >=1.21.5 {
+        /*context.getModEventBus().addListener(EventPriority.NORMAL, false, RegisterEvent.class,
+                event -> {
+                    if (event.getRegistryKey().equals(Registries.TICKET_TYPE)) {
+                        JourneyTicket.register();
+                    }
+                });
+        *///?} else
         /*JourneyTicket.register();*/
+    }
 
+    /**
+     * Subscribes to the game events, on whichever bus this version has.
+     *
+     * <p>The seam is Forge 1.21.6, and it was measured rather than guessed: every target's own
+     * {@code userdev} config.json names the EventBus build it ships, and they run 6.2.8 → 6.2.33 up
+     * to 1.21.5 and 7.0-beta.10 → 7.0.5 from 1.21.6 on. EventBus 7 replaced one bus carrying every
+     * event with a static bus per event class, so there is no object to hold and no event class to
+     * pass — the bus already knows its own type.
+     *
+     * <p>On EventBus 6 each listener names its event class explicitly. The shorter
+     * {@code addListener(this::onEntityLoad)} overload does exist, but it infers the event type from
+     * the consumer's generic signature, and a method reference carries none — so it fails when the
+     * listener is registered rather than when it is compiled. That is the silent-wiring failure §1.1
+     * warns about, on the branch where it is hardest to notice, and naming the class avoids it.
+     *
+     * <p>One accessor moved with the rewrite: the tick event became a record, so it exposes
+     * {@code server()} where its lifecycle-event neighbours kept {@code getServer()}.
+     */
+    private void wireGameEvents(ChunkCartsCommand command) {
+        //? if >=1.21.6 {
         ServerStartedEvent.BUS.addListener(event -> start(event.getServer()));
         ServerStoppingEvent.BUS.addListener(event -> stop());
-        // A record component, so the accessor is server() rather than the getServer() its
-        // lifecycle-event neighbours use.
         TickEvent.ServerTickEvent.Post.BUS.addListener(event -> onServerTick(event.server()));
 
         EntityJoinLevelEvent.BUS.addListener(this::onEntityLoad);
         EntityLeaveLevelEvent.BUS.addListener(this::onEntityUnload);
-        PlayerInteractEvent.EntityInteract.BUS.addListener(this::onUseEntity);
         PlayerInteractEvent.RightClickBlock.BUS.addListener(this::onUseBlock);
 
-        ChunkCartsCommand command = new ChunkCartsCommand(this);
         RegisterCommandsEvent.BUS.addListener(event -> command.register(event.getDispatcher()));
+        //?} else {
+        /*IEventBus gameBus = MinecraftForge.EVENT_BUS;
 
-        warnAboutRivals();
+        gameBus.addListener(EventPriority.NORMAL, false, ServerStartedEvent.class,
+                event -> start(event.getServer()));
+        gameBus.addListener(EventPriority.NORMAL, false, ServerStoppingEvent.class,
+                event -> stop());
+        gameBus.addListener(EventPriority.NORMAL, false, TickEvent.ServerTickEvent.Post.class,
+                event -> onServerTick(event.getServer()));
+
+        gameBus.addListener(EventPriority.NORMAL, false, EntityJoinLevelEvent.class,
+                this::onEntityLoad);
+        gameBus.addListener(EventPriority.NORMAL, false, EntityLeaveLevelEvent.class,
+                this::onEntityUnload);
+        gameBus.addListener(EventPriority.NORMAL, false, PlayerInteractEvent.RightClickBlock.class,
+                this::onUseBlock);
+
+        gameBus.addListener(EventPriority.NORMAL, false, RegisterCommandsEvent.class,
+                event -> command.register(event.getDispatcher()));
+        *///?}
+
+        wireEntityInteract();
+    }
+
+    /**
+     * The right-click-on-an-entity subscription, which crosses both seams at once and so gets a
+     * method of its own rather than a third copy of everything above.
+     *
+     * <p>26.1 deleted {@code PlayerInteractEvent.EntityInteract} outright, leaving only
+     * {@code EntityInteractSpecific} — the variant that also knows which part of the entity was
+     * clicked. Verified by reading the 26.1, 26.1.1, 26.1.2 and 26.2 sources; 1.21.11 and earlier
+     * still have both. The two fire at slightly different points of the same click, the Specific one
+     * first, and for the purpose here — noting that a player touched this cart — either is correct.
+     */
+    private void wireEntityInteract() {
+        //? if >=26.1 {
+        PlayerInteractEvent.EntityInteractSpecific.BUS.addListener(this::onUseEntity);
+        //?} elif >=1.21.6 {
+        /*PlayerInteractEvent.EntityInteract.BUS.addListener(this::onUseEntity);
+        *///?} else {
+        /*MinecraftForge.EVENT_BUS.addListener(EventPriority.NORMAL, false,
+                PlayerInteractEvent.EntityInteract.class, this::onUseEntity);
+        *///?}
+    }
+
+    /**
+     * The mod list, which stopped being a singleton in 26.1 and became a static holder — so
+     * {@code ModList.get()} does not exist there. Wrapped once rather than branched at both call
+     * sites, because the method names either side of the change are identical and only the receiver
+     * moved.
+     */
+    private static Optional<? extends ModContainer> modContainer(String id) {
+        //? if >=26.1 {
+        return ModList.getModContainerById(id);
+        //?} else
+        /*return ModList.get().getModContainerById(id);*/
     }
 
     private static void warnAboutRivals() {
         for (String rival : RIVALS) {
-            ModList.get().getModContainerById(rival).ifPresent(container -> LOGGER.warn(
+            modContainer(rival).ifPresent(container -> LOGGER.warn(
                     "{} is installed alongside ChunkCarts. Behaviour is undefined and ChunkCarts' "
                             + "safety guarantee is void: another mod will happily hold chunks "
                             + "ChunkCarts has released.",
@@ -323,7 +439,10 @@ public final class ChunkCartsForge implements ChunkCartsMod {
      * {@code Predicate} overloads is how that is enforced here: a listener that cannot return a
      * verdict cannot accidentally give one.
      */
-    private void onUseEntity(PlayerInteractEvent.EntityInteract event) {
+    //? if >=26.1 {
+    private void onUseEntity(PlayerInteractEvent.EntityInteractSpecific event) {
+    //?} else
+    /*private void onUseEntity(PlayerInteractEvent.EntityInteract event) {*/
         if (tracker == null || event.getLevel().isClientSide()
                 || !(event.getTarget() instanceof AbstractMinecart cart)) {
             return;
@@ -374,7 +493,7 @@ public final class ChunkCartsForge implements ChunkCartsMod {
     }
 
     private static String modVersion() {
-        return ModList.get().getModContainerById(MOD_ID)
+        return modContainer(MOD_ID)
                 .map(container -> container.getModInfo().getVersion().toString())
                 .orElse("(unknown)");
     }

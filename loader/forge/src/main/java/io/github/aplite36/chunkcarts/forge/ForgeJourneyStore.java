@@ -53,10 +53,11 @@ final class ForgeJourneyStore implements JourneyStore {
         // which is exactly the "has never travelled" answer §7 asks for.
         //? if >=1.21.5 {
         return data.getString(KEY).map(Base64.getDecoder()::decode);
-        //?} else
+        //?} else {
         /*return data.contains(KEY)
                 ? Optional.of(Base64.getDecoder().decode(data.getString(KEY)))
-                : Optional.empty();*/
+                : Optional.empty();
+        *///?}
     }
 
     @Override
