@@ -17,14 +17,18 @@ carts cannot be turned into chunk loaders.
 
 [[dependencies.chunkcarts]]
 modId = "forge"
-type = "required"
+# Forge spells this `mandatory`, not NeoForge's `type = "required"`, and it has no default: a
+# dependency block without it is rejected outright and the mod silently never loads. Verified
+# against ModInfo's ModVersion in the fmlloader jar of all fifteen targets — `mandatory` on every
+# one, `type` on none.
+mandatory = true
 versionRange = "[${loader},)"
 ordering = "NONE"
 side = "SERVER"
 
 [[dependencies.chunkcarts]]
 modId = "minecraft"
-type = "required"
+mandatory = true
 # Exactly this version, not a floor. SPEC §11 ships one jar per game version, and an open-ended
 # range would have the 1.21 jar claim to run on 26.2 — where half the API it calls is gone.
 versionRange = "[${mc}]"
