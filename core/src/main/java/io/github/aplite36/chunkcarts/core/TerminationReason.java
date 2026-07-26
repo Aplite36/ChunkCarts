@@ -17,6 +17,13 @@ public enum TerminationReason {
     /** Pause tolerance expired while still above min-speed — wedged, blocked, or oscillating. */
     STALLED,
 
+    /**
+     * Dropped by the §8 drift leash: a cluster member that ended up beyond {@code region-radius}
+     * of the lead. Not an arrival — the cart has genuinely got somewhere else, but it releases its
+     * chunks at once rather than earning a hold, which is why it cannot be labelled ARRIVED.
+     */
+    DROPPED,
+
     BUDGET_EXHAUSTED,
 
     /** No new distance record within the slack allowance — a closed loop was detected. */

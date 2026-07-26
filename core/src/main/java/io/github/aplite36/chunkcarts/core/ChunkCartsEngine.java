@@ -471,7 +471,7 @@ public final class ChunkCartsEngine {
             // Terminated individually and immediately, so the chunks it dragged along are released
             // rather than left held by the cluster it left. A shunt onto a siding stays well inside
             // the leash; this is the cart that ended up a hundred blocks away.
-            lastTermination.put(memberId, TerminationReason.STALLED);
+            lastTermination.put(memberId, TerminationReason.DROPPED);
             flushDormant(member);
         }
     }

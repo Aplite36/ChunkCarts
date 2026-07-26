@@ -6,6 +6,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
 
+import java.util.List;
 import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -103,6 +104,24 @@ class LifecycleTest extends EngineTest {
                 cart.velocity(0.3);
                 clock.advance(config().pauseTolerance().plusSeconds(1));
                 poll(cart);
+            }
+            case DROPPED -> {
+                // The one reason where the terminated cart is not the journey's lead: `cart` is
+                // the member the §8 leash drops. The lead is then derailed so that a held count
+                // of zero accounts for both regions — the cluster's and the one the drifter
+                // dragged out with it.
+                cfg.regionRadius(1);
+                FakeCart lead = FakeCart.at(OVERWORLD, 0, 0).atBlock(8, 8);
+                cart.atBlock(9, 8);
+                grantToken(lead);
+                assertDeparted(engine().tryDepart(lead, List.of(lead, cart)));
+
+                cart.atChunk(40, 40);
+                tickPoll(lead, cart);
+                tickPoll(lead);
+
+                world.derail(lead.id());
+                tickPoll(lead);
             }
             case ARRIVED -> throw new IllegalStateException("excluded by @EnumSource");
         }
