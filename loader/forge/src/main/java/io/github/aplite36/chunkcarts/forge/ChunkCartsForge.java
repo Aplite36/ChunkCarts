@@ -186,15 +186,11 @@ public final class ChunkCartsForge implements ChunkCartsMod {
      * the consumer's generic signature, and a method reference carries none — so it fails when the
      * listener is registered rather than when it is compiled. That is the silent-wiring failure §1.1
      * warns about, on the branch where it is hardest to notice, and naming the class avoids it.
-     *
-     * <p>One accessor moved with the rewrite: the tick event became a record, so it exposes
-     * {@code server()} where its lifecycle-event neighbours kept {@code getServer()}.
      */
     private void wireGameEvents(ChunkCartsCommand command) {
         //? if >=1.21.6 {
         ServerStartedEvent.BUS.addListener(event -> start(event.getServer()));
         ServerStoppingEvent.BUS.addListener(event -> stop());
-        TickEvent.ServerTickEvent.Post.BUS.addListener(event -> onServerTick(event.server()));
 
         EntityJoinLevelEvent.BUS.addListener(this::onEntityLoad);
         EntityLeaveLevelEvent.BUS.addListener(this::onEntityUnload);
@@ -208,8 +204,6 @@ public final class ChunkCartsForge implements ChunkCartsMod {
                 event -> start(event.getServer()));
         gameBus.addListener(EventPriority.NORMAL, false, ServerStoppingEvent.class,
                 event -> stop());
-        gameBus.addListener(EventPriority.NORMAL, false, TickEvent.ServerTickEvent.Post.class,
-                event -> onServerTick(event.getServer()));
 
         gameBus.addListener(EventPriority.NORMAL, false, EntityJoinLevelEvent.class,
                 this::onEntityLoad);
@@ -222,7 +216,29 @@ public final class ChunkCartsForge implements ChunkCartsMod {
                 event -> command.register(event.getDispatcher()));
         *///?}
 
+        wireServerTick();
         wireEntityInteract();
+    }
+
+    /**
+     * The server-tick subscription, which needs a third seam of its own.
+     *
+     * <p>The EventBus rewrite at 1.21.6 and the shape of this event are <em>not</em> the same change,
+     * which cost a build to find out. On 1.21.6, 1.21.7 and 1.21.8 the event is a sealed class with
+     * {@code getServer()}, exactly as it was under EventBus 6; it became a record exposing
+     * {@code server()} at 1.21.9. Read off the 1.21.8 sources after those three targets failed on
+     * {@code cannot find symbol: method server()} while 1.21.9 and 1.21.11 compiled — the kind of gap
+     * only building every candidate finds (§12).
+     */
+    private void wireServerTick() {
+        //? if >=1.21.9 {
+        TickEvent.ServerTickEvent.Post.BUS.addListener(event -> onServerTick(event.server()));
+        //?} elif >=1.21.6 {
+        /*TickEvent.ServerTickEvent.Post.BUS.addListener(event -> onServerTick(event.getServer()));
+        *///?} else {
+        /*MinecraftForge.EVENT_BUS.addListener(EventPriority.NORMAL, false,
+                TickEvent.ServerTickEvent.Post.class, event -> onServerTick(event.getServer()));
+        *///?}
     }
 
     /**
