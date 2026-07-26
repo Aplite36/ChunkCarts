@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 1,
+  "id": "chunkcarts",
+  "version": "${version}",
+  "name": "ChunkCarts",
+  "description": "Minecarts load chunks while travelling. Closed and looping tracks stop loading automatically, so carts cannot be turned into chunk loaders.",
+  "authors": ["Aplite36"],
+  "contact": {
+    "homepage": "https://modrinth.com/mod/chunkcarts",
+    "sources": "https://github.com/Aplite36/ChunkCarts"
+  },
+  "license": "LGPL-3.0-or-later",
+  "environment": "*",
+  "entrypoints": {
+    "main": ["io.github.aplite36.chunkcarts.fabric.ChunkCartsFabric"]
+  },
+  "depends": {
+    "fabricloader": ">=0.19.0",
+    "fabric-api": "*",
+    "minecraft": "${mc}"
+  }
+}
