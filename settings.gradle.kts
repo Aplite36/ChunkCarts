@@ -33,6 +33,7 @@ val mcTargets = listOf(
 stonecutter {
     create("loader") {
         branch("fabric") { versions(mcTargets) }
+        branch("neoforge") { versions(mcTargets) }
         vcsVersion = "26.2"
     }
 }
