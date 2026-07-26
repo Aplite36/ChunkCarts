@@ -12,6 +12,8 @@ plugins {
 
 val mc = stonecutter.current.version
 
+val snakeyamlVersion = "2.6"
+
 // 26.1 is the first fully unobfuscated release. Verified, not assumed: Mojang's version
 // manifest lists `server_mappings` for 1.21.11 and does not for 26.1 or 26.2.
 //
@@ -60,6 +62,13 @@ dependencies {
     modDependency("net.fabricmc.fabric-api:fabric-api:${property("fabric_api_version")}")
 
     implementation(project(":core"))
+
+    // The config schema lives in core and takes a plain nested map, so something has to turn
+    // config/chunkcarts.yml into one. Bukkit gets SnakeYAML from the server; here it is bundled, so
+    // that a config.yml copied off a Paper server parses identically rather than nearly so.
+    // Jar-in-Jar rather than shaded: Loader unpacks it, and two mods bundling it stay compatible.
+    implementation("org.yaml:snakeyaml:$snakeyamlVersion")
+    "include"("org.yaml:snakeyaml:$snakeyamlVersion")
 }
 
 tasks.processResources {
