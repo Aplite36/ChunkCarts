@@ -303,6 +303,8 @@ stranded:
   #   BUDGET_EXHAUSTED   long legitimate route — consider raising the budget
   #   SLACK_EXHAUSTED    a loop was detected and stopped — working as intended
   #   STALLED            the cart got stuck, or rattled inside one chunk
+  #   DROPPED            a cart travelling with others ended up far from them
+  #                      and was accounted for on its own
   #   ARRIVED            reached its destination normally
   #   UNGENERATED_CHUNK  the track heads into unexplored terrain
   #   LEFT_RAILS         the cart derailed
