@@ -51,7 +51,8 @@ final class ChunkCartsCommand implements CommandExecutor, TabCompleter {
         }
         sender.sendMessage("[ChunkCarts] " + journeys.size() + "/"
                 + engine.config().maxConcurrentJourneys() + " journeys, "
-                + plugin.heldChunkCount() + " chunks held, "
+                + plugin.heldChunkCount() + " chunks held ("
+                + plugin.heldChunkLevels() + "), "
                 + String.format(Locale.ROOT, "%.1f", engine.effectiveTps()) + " TPS:");
         for (JourneySnapshot journey : journeys) {
             sender.sendMessage(String.format(Locale.ROOT,

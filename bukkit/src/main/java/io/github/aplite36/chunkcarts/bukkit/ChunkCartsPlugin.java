@@ -71,6 +71,18 @@ public final class ChunkCartsPlugin extends JavaPlugin {
         return tickets.heldCount();
     }
 
+    /**
+     * A tally of the load levels of the chunks currently held, as {@code ENTITY_TICKING x9}.
+     *
+     * <p>Worth a place in {@code list} rather than hiding behind debug: it is the only in-game
+     * evidence for the claim no unit test can reach, that held chunks actually tick.
+     */
+    String heldChunkLevels() {
+        return tickets.heldLevels().entrySet().stream()
+                .map(e -> e.getKey() + " x" + e.getValue())
+                .collect(java.util.stream.Collectors.joining(", "));
+    }
+
     boolean toggleDebug() {
         debug = !debug;
         tracker.setDebug(debug);

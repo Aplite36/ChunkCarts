@@ -1,5 +1,6 @@
 package io.github.aplite36.chunkcarts.bukkit;
 
+import com.destroystokyo.paper.event.entity.EntityRemoveFromWorldEvent;
 import io.github.aplite36.chunkcarts.core.CartEvent;
 import io.github.aplite36.chunkcarts.core.ChunkCartsEngine;
 import org.bukkit.entity.Entity;
@@ -7,12 +8,12 @@ import org.bukkit.entity.Minecart;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
-import com.destroystokyo.paper.event.entity.EntityRemoveFromWorldEvent;
 import org.bukkit.event.entity.EntityPlaceEvent;
 import org.bukkit.event.inventory.InventoryOpenEvent;
 import org.bukkit.event.player.PlayerInteractEntityEvent;
 import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
+import org.bukkit.event.vehicle.VehicleCreateEvent;
 import org.bukkit.event.world.EntitiesLoadEvent;
 import org.bukkit.inventory.InventoryHolder;
 
@@ -45,6 +46,21 @@ final class ChunkCartsListener implements Listener {
             if (entity instanceof Minecart cart) {
                 tracker.track(cart);
             }
+        }
+    }
+
+    /**
+     * A cart that came into being in an already-loaded chunk: dispensed, summoned, or placed.
+     *
+     * <p>{@link EntitiesLoadEvent} does not cover this — it fires for chunks arriving, not for
+     * entities appearing in a chunk that is already here. Without this handler a dispenser-fed
+     * station, which is the archetypal ChunkCarts setup, produces carts the plugin cannot see
+     * until something makes their chunk reload.
+     */
+    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
+    public void onVehicleCreate(VehicleCreateEvent event) {
+        if (event.getVehicle() instanceof Minecart cart) {
+            tracker.track(cart);
         }
     }
 
