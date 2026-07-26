@@ -7,7 +7,10 @@ import io.github.aplite36.chunkcarts.core.platform.CartView;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
+//? if >=1.21.11 {
 import net.minecraft.world.entity.vehicle.minecart.AbstractMinecart;
+//?} else
+/*import net.minecraft.world.entity.vehicle.AbstractMinecart;*/
 import net.minecraft.world.phys.AABB;
 import org.slf4j.Logger;
 

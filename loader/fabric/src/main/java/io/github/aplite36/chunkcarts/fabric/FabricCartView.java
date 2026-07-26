@@ -6,6 +6,8 @@ import io.github.aplite36.chunkcarts.core.platform.CartView;
 import net.fabricmc.fabric.api.attachment.v1.AttachmentTarget;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.Container;
+// The minecart classes kept their names and moved to a subpackage of their own in 1.21.11.
+//? if >=1.21.11 {
 import net.minecraft.world.entity.vehicle.minecart.AbstractMinecart;
 import net.minecraft.world.entity.vehicle.minecart.MinecartChest;
 import net.minecraft.world.entity.vehicle.minecart.MinecartCommandBlock;
@@ -13,6 +15,15 @@ import net.minecraft.world.entity.vehicle.minecart.MinecartFurnace;
 import net.minecraft.world.entity.vehicle.minecart.MinecartHopper;
 import net.minecraft.world.entity.vehicle.minecart.MinecartSpawner;
 import net.minecraft.world.entity.vehicle.minecart.MinecartTNT;
+//?} else {
+/*import net.minecraft.world.entity.vehicle.AbstractMinecart;
+import net.minecraft.world.entity.vehicle.MinecartChest;
+import net.minecraft.world.entity.vehicle.MinecartCommandBlock;
+import net.minecraft.world.entity.vehicle.MinecartFurnace;
+import net.minecraft.world.entity.vehicle.MinecartHopper;
+import net.minecraft.world.entity.vehicle.MinecartSpawner;
+import net.minecraft.world.entity.vehicle.MinecartTNT;
+*///?}
 import net.minecraft.world.phys.Vec3;
 
 import java.util.Optional;
@@ -58,7 +69,10 @@ final class FabricCartView implements CartView {
      * match under either {@code worlds.mode}.
      */
     static WorldId worldIdOf(net.minecraft.world.level.Level level) {
+        //? if >=1.21.11 {
         return new WorldId(level.dimension().identifier().toString());
+        //?} else
+        /*return new WorldId(level.dimension().location().toString());*/
     }
 
     @Override
@@ -86,9 +100,9 @@ final class FabricCartView implements CartView {
      * speed plugin, which over-reacts everywhere: §5 would halve the poll interval on a stock server
      * for no gain, and §3.4 would call a stopped cart moving.
      *
-     * <p>{@link net.minecraft.world.entity.vehicle.minecart.MinecartBehavior#getMaxSpeed} is the
-     * clamp the game itself applies, so the smaller of the two is the honest answer. Speed-modifying
-     * mods raise it, which is exactly when §5 should fire.
+     * <p>{@code MinecartBehavior#getMaxSpeed} is the clamp the game itself applies, so the smaller
+     * of the two is the honest answer. Speed-modifying mods raise it, which is exactly when §5
+     * should fire.
      */
     @Override
     public double velocity() {
@@ -96,7 +110,15 @@ final class FabricCartView implements CartView {
         if (!(cart.level() instanceof ServerLevel level)) {
             return motion.length();
         }
+        // Before 1.21.3 there is no MinecartBehavior and AbstractMinecart#getMaxSpeed is protected,
+        // so there is no honest clamp to apply and the raw vector is all there is. It over-reports
+        // on a booster track, and over-reporting is the safe direction of the two: §5 shortens the
+        // poll interval it did not need to shorten, costing a little CPU. It cannot make a stopped
+        // cart look like a moving one, because a cart at rest has no motion to over-report.
+        //? if >=1.21.3 {
         return Math.min(motion.length(), cart.getBehavior().getMaxSpeed(level));
+        //?} else
+        /*return motion.length();*/
     }
 
     @Override

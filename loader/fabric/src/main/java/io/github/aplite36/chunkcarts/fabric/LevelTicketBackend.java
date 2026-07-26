@@ -122,9 +122,12 @@ final class LevelTicketBackend implements ChunkTicketBackend {
         if (level == null) {
             return false;
         }
+        ChunkPos pos = new ChunkPos(chunk.cx(), chunk.cz());
+        //? if >=1.21.5 {
         level.getChunkSource().addTicketWithRadius(
-                ChunkCartsFabric.journeyTicket(), new ChunkPos(chunk.cx(), chunk.cz()),
-                TICKET_RADIUS);
+                ChunkCartsFabric.journeyTicket(), pos, TICKET_RADIUS);
+        //?} else
+        /*level.getChunkSource().addRegionTicket(ChunkCartsFabric.journeyTicket(), pos, TICKET_RADIUS, pos);*/
         return true;
     }
 
@@ -132,8 +135,12 @@ final class LevelTicketBackend implements ChunkTicketBackend {
     public void release(WorldId world, int cx, int cz) {
         ServerLevel level = worlds.level(world);
         if (level != null) {
+            ChunkPos pos = new ChunkPos(cx, cz);
+            //? if >=1.21.5 {
             level.getChunkSource().removeTicketWithRadius(
-                    ChunkCartsFabric.journeyTicket(), new ChunkPos(cx, cz), TICKET_RADIUS);
+                    ChunkCartsFabric.journeyTicket(), pos, TICKET_RADIUS);
+            //?} else
+            /*level.getChunkSource().removeRegionTicket(ChunkCartsFabric.journeyTicket(), pos, TICKET_RADIUS, pos);*/
         }
         held.remove(new Held(world.value(), cx, cz));
     }

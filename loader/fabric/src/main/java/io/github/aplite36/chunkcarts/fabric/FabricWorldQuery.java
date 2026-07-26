@@ -11,7 +11,6 @@ import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.tags.BlockTags;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.chunk.status.ChunkStatus;
-import net.minecraft.world.level.chunk.storage.SerializableChunkData;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.LinkedHashMap;
@@ -98,13 +97,31 @@ final class FabricWorldQuery implements WorldQuery {
 
         Optional<CompoundTag> stored = level.getChunkSource().chunkMap.read(new ChunkPos(cx, cz)).join();
         // Present-but-unfinished is not generated. A proto-chunk saved mid-generation still needs
-        // the rest of the pipeline run on it, which is exactly the work this refuses to trigger.
+        // the rest of the pipeline run on it, which is exactly the work this refuses to trigger —
+        // and the ring of them around explored terrain is where a cart would meet one.
         boolean exists = stored.isPresent()
-                && SerializableChunkData.getChunkStatusFromTag(stored.get()) == ChunkStatus.FULL;
+                && ChunkStatus.FULL.toString().equals(savedStatus(stored.get()));
         if (exists) {
             generated.put(key, Boolean.TRUE);
         }
         return exists;
+    }
+
+    /**
+     * The {@code Status} string a saved chunk carries, or empty if it has none.
+     *
+     * <p>Read as a raw string and compared against {@code ChunkStatus.FULL.toString()} rather than
+     * through a parsing helper, because every version spells the helper differently — 1.21 has
+     * {@code ChunkSerializer.getChunkTypeFromTag}, 1.21.3 has neither, 1.21.5 has
+     * {@code SerializableChunkData.getChunkStatusFromTag} — while the string in the save file has
+     * been the chunk-status registry key throughout. Verified on the 1.21 and 26.2 bytecode:
+     * {@code ChunkStatus#toString} returns that same registry key on both.
+     */
+    private static String savedStatus(CompoundTag tag) {
+        //? if >=1.21.5 {
+        return tag.getStringOr("Status", "");
+        //?} else
+        /*return tag.getString("Status");*/
     }
 
     /**

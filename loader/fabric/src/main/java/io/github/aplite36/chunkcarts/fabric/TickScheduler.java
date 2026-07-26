@@ -1,7 +1,11 @@
 package io.github.aplite36.chunkcarts.fabric;
 
 import io.github.aplite36.chunkcarts.core.platform.Scheduler;
+import net.minecraft.server.MinecraftServer;
+//? if >=1.21.3 {
 import net.minecraft.util.profiling.Profiler;
+//?}
+import net.minecraft.util.profiling.ProfilerFiller;
 
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -84,18 +88,24 @@ final class TickScheduler {
      * means by "name it — profilers": on this platform the name reaches {@code /debug} output and
      * spark reports, so a server owner can see what ChunkCarts costs without instrumenting it.
      */
-    void tick() {
+    void tick(MinecraftServer server) {
         // Snapshot: a task body may reschedule itself, and the §5 clamp does exactly that.
         for (Entry entry : List.copyOf(tasks.values())) {
             if (--entry.countdown > 0) {
                 continue;
             }
             entry.countdown = entry.intervalTicks;
-            Profiler.get().push(entry.name);
+            // The thread-local Profiler holder arrived in 1.21.3; before that the profiler is the
+            // server's, which is why this takes one.
+            //? if >=1.21.3 {
+            ProfilerFiller profiler = Profiler.get();
+            //?} else
+            /*ProfilerFiller profiler = server.getProfiler();*/
+            profiler.push(entry.name);
             try {
                 entry.body.run();
             } finally {
-                Profiler.get().pop();
+                profiler.pop();
             }
         }
     }

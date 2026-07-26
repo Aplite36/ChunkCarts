@@ -7,9 +7,11 @@ import io.github.aplite36.chunkcarts.core.JourneySnapshot;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
 import net.minecraft.network.chat.Component;
+//? if >=1.21.11 {
 import net.minecraft.resources.Identifier;
 import net.minecraft.server.permissions.Permission;
 import net.minecraft.server.permissions.Permissions;
+//?}
 
 import java.util.List;
 import java.util.Locale;
@@ -26,20 +28,25 @@ import java.util.function.Supplier;
 final class ChunkCartsCommand {
 
     /**
-     * SPEC §10 asks for the single permission {@code chunkcarts.admin}, and 26.x can express exactly
-     * that: permissions are named atoms now, not just numeric levels.
+     * SPEC §10 asks for the single permission {@code chunkcarts.admin}. From 1.21.11 the game can
+     * express exactly that — permissions became named atoms rather than only numeric levels — and
+     * before that there is nothing to express it with, so the check is gamemaster level alone.
      *
-     * <p>The fallback is not optional. {@code LevelBasedPermissionSet}, which is what a server
-     * without a permission mod uses, answers {@code false} to every atom it does not know — so an
-     * atom check alone would lock out the operators of a plain vanilla server, including whoever
-     * installed the mod. Gamemaster level is the same bar the vanilla commands of this weight use.
+     * <p>Even where the atom exists, the level fallback is not optional.
+     * {@code LevelBasedPermissionSet}, which is what a server without a permission mod uses, answers
+     * {@code false} to every atom it does not know — so an atom check alone would lock out the
+     * operators of a plain vanilla server, including whoever installed the mod. Gamemaster is the
+     * same bar the vanilla commands of this weight use, on both sides of the seam.
      */
+    //? if >=1.21.11 {
     private static final Permission ADMIN =
             Permission.Atom.create(Identifier.fromNamespaceAndPath(ChunkCartsFabric.MOD_ID, "admin"));
 
     private static final Predicate<CommandSourceStack> IS_ADMIN = source ->
             source.permissions().hasPermission(ADMIN)
                     || source.permissions().hasPermission(Permissions.COMMANDS_GAMEMASTER);
+    //?} else
+    /*private static final Predicate<CommandSourceStack> IS_ADMIN = source -> source.hasPermission(2);*/
 
     private final ChunkCartsFabric mod;
 

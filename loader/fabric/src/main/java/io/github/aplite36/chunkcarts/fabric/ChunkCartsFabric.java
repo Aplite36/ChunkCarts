@@ -17,19 +17,27 @@ import net.fabricmc.fabric.api.event.player.UseEntityCallback;
 import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.core.Registry;
 import net.minecraft.core.registries.BuiltInRegistries;
+//? if >=1.21.11 {
 import net.minecraft.resources.Identifier;
+//?} else
+/*import net.minecraft.resources.ResourceLocation;*/
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.TicketType;
 import net.minecraft.world.Container;
 import net.minecraft.world.InteractionResult;
 import net.minecraft.world.entity.Entity;
+//? if >=1.21.11 {
 import net.minecraft.world.entity.vehicle.minecart.AbstractMinecart;
+//?} else
+/*import net.minecraft.world.entity.vehicle.AbstractMinecart;*/
 import net.minecraft.world.item.MinecartItem;
+import net.minecraft.world.level.ChunkPos;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.Base64;
+import java.util.Comparator;
 import java.util.List;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -82,7 +90,10 @@ public final class ChunkCartsFabric implements ModInitializer {
      * never persists, but it costs a line and it is what makes the type print as
      * {@code chunkcarts:journey} in a debug dump instead of as an anonymous record.
      */
+    //? if >=1.21.5 {
     private static TicketType journeyTicket;
+    //?} else
+    /*private static TicketType<ChunkPos> journeyTicket;*/
 
     /**
      * The journey state, attached to the cart entity (SPEC §7). Raw bytes with a schema version in
@@ -105,9 +116,15 @@ public final class ChunkCartsFabric implements ModInitializer {
 
     private record PendingPlacement(UUID player, double x, double y, double z, long gameTime) {}
 
+    //? if >=1.21.5 {
     static TicketType journeyTicket() {
         return journeyTicket;
     }
+    //?} else {
+    /*static TicketType<ChunkPos> journeyTicket() {
+        return journeyTicket;
+    }
+    *///?}
 
     static AttachmentType<byte[]> journeyState() {
         return journeyState;
@@ -115,15 +132,49 @@ public final class ChunkCartsFabric implements ModInitializer {
 
     @Override
     public void onInitialize() {
+        // Four generations of the same ticket, oldest last. What changes is only how the type is
+        // described — flags, then a persist boolean plus a three-valued enum, then a comparator and
+        // a timeout — and whether it lives in a registry at all. What does not change is the level
+        // arithmetic: TicketStorage and, before it, DistanceManager both build the ticket at
+        // ChunkLevel.byStatus(FULL) minus the radius, checked against the bytecode on 1.21, 1.21.4,
+        // 1.21.5 and 1.21.8. So TICKET_RADIUS means entity-ticking on every one of them.
+        //
+        // Two capabilities genuinely do not exist further back, both minor: before 1.21.9 there is
+        // no keep-dimension-active flag, so a cart crossing a dimension nobody is in relies on that
+        // dimension ticking anyway; and before 1.21.5 the type is not registered, so it prints
+        // anonymously in a debug dump.
+        // On the oldest branch the chunk position doubles as the ticket's identity value, which is
+        // what vanilla's own per-chunk tickets do there and is what makes a re-add refresh rather
+        // than stack.
+        //? if >=1.21.11 {
         journeyTicket = Registry.register(
                 BuiltInRegistries.TICKET_TYPE,
                 Identifier.fromNamespaceAndPath(MOD_ID, "journey"),
                 new TicketType(100L, TicketType.FLAG_LOADING
                         | TicketType.FLAG_SIMULATION
                         | TicketType.FLAG_KEEP_DIMENSION_ACTIVE));
+        //?} elif >=1.21.9 {
+        /*journeyTicket = Registry.register(
+                BuiltInRegistries.TICKET_TYPE,
+                ResourceLocation.fromNamespaceAndPath(MOD_ID, "journey"),
+                new TicketType(100L, TicketType.FLAG_LOADING
+                        | TicketType.FLAG_SIMULATION
+                        | TicketType.FLAG_KEEP_DIMENSION_ACTIVE));
+        *///?} elif >=1.21.5 {
+        /*journeyTicket = Registry.register(
+                BuiltInRegistries.TICKET_TYPE,
+                ResourceLocation.fromNamespaceAndPath(MOD_ID, "journey"),
+                new TicketType(100L, false, TicketType.TicketUse.LOADING_AND_SIMULATION));
+        *///?} else {
+        /*journeyTicket = TicketType.create(
+                MOD_ID + "_journey", Comparator.comparingLong(ChunkPos::toLong), 100);
+        *///?}
 
         journeyState = AttachmentRegistry.createPersistent(
+                //? if >=1.21.11 {
                 Identifier.fromNamespaceAndPath(MOD_ID, "journey"),
+                //?} else
+                /*ResourceLocation.fromNamespaceAndPath(MOD_ID, "journey"),*/
                 Codec.STRING.xmap(Base64.getDecoder()::decode, Base64.getEncoder()::encodeToString));
 
         ServerLifecycleEvents.SERVER_STARTED.register(this::start);
@@ -275,7 +326,7 @@ public final class ChunkCartsFabric implements ModInitializer {
         // costs a size check and cannot drift out of step with reality the way an event pair can.
         engine.setPlayersOnline(!ticking.getPlayerList().getPlayers().isEmpty());
         tickets.tick();
-        scheduler.tick();
+        scheduler.tick(ticking);
     }
 
     /**
