@@ -12,3 +12,16 @@ api-version: '1.21'
 # ticket acquisition and genuinely concurrent state. Declared explicitly so Folia refuses
 # to load this rather than running it in a broken configuration.
 folia-supported: false
+
+commands:
+  chunkcarts:
+    description: Inspect and manage ChunkCarts.
+    usage: /chunkcarts <list|reload|debug>
+    permission: chunkcarts.admin
+    # No /cc alias: it collides with chat-clear commands on a great many servers (SPEC §10).
+    aliases: [ccarts]
+
+permissions:
+  chunkcarts.admin:
+    description: Use /chunkcarts. There is deliberately no per-player permission beyond this.
+    default: op

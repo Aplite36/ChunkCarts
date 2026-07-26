@@ -24,6 +24,11 @@ tasks.processResources {
     filesMatching("plugin.yml") {
         expand("version" to pluginVersion)
     }
+
+    // The annotated config.yml is shared with the loaders, so it lives at the repo root and is
+    // copied in rather than duplicated here. Two copies would drift, and the comments are half
+    // the documentation this plugin has.
+    from(rootProject.file("config.yml"))
 }
 
 // The thin jar has no core/ classes in it, so dropping it on a server fails at runtime with
