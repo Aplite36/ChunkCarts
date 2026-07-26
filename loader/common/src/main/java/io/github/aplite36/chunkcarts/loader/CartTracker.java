@@ -1,4 +1,4 @@
-package io.github.aplite36.chunkcarts.fabric;
+package io.github.aplite36.chunkcarts.loader;
 
 import io.github.aplite36.chunkcarts.core.ChunkCartsEngine;
 import io.github.aplite36.chunkcarts.core.DepartureOutcome;
@@ -32,7 +32,7 @@ import java.util.UUID;
  * poll. Scanning would walk every loaded entity on the server twice a second to find the handful
  * that are minecarts.
  */
-final class CartTracker {
+public final class CartTracker {
 
     /**
      * How close two carts must be to count as coupled. Vanilla carts push each other apart at about
@@ -47,28 +47,30 @@ final class CartTracker {
     private final ChunkCartsEngine engine;
     private final MinecraftServer server;
     private final Logger log;
+    private final JourneyStore journeys;
 
     private final Map<UUID, AbstractMinecart> tracked = new LinkedHashMap<>();
     private final Map<UUID, UUID> lastInteractor = new LinkedHashMap<>();
 
     private boolean debug;
 
-    CartTracker(ChunkCartsEngine engine, MinecraftServer server, Logger log) {
+    public CartTracker(ChunkCartsEngine engine, MinecraftServer server, Logger log, JourneyStore journeys) {
         this.engine = engine;
         this.server = server;
         this.log = log;
+        this.journeys = journeys;
     }
 
-    void setDebug(boolean debug) {
+    public void setDebug(boolean debug) {
         this.debug = debug;
     }
 
-    int trackedCount() {
+    public int trackedCount() {
         return tracked.size();
     }
 
     /** Registers a cart and restores any journey it carries in its attached data (SPEC §7). */
-    void track(AbstractMinecart cart) {
+    public void track(AbstractMinecart cart) {
         if (tracked.putIfAbsent(cart.getUUID(), cart) == null) {
             engine.restore(view(cart));
         }
@@ -82,23 +84,23 @@ final class CartTracker {
      * re-registers itself when its chunk comes back, whereas a journey whose lead has quietly
      * vanished would hold its region until the ticket expires.
      */
-    void untrack(UUID cartId) {
+    public void untrack(UUID cartId) {
         if (tracked.remove(cartId) != null) {
             engine.onCartRemoved(cartId);
         }
         lastInteractor.remove(cartId);
     }
 
-    void recordInteractor(UUID cartId, UUID player) {
+    public void recordInteractor(UUID cartId, UUID player) {
         lastInteractor.put(cartId, player);
     }
 
-    FabricCartView view(AbstractMinecart cart) {
-        return new FabricCartView(cart, lastInteractor.get(cart.getUUID()));
+    LevelCartView view(AbstractMinecart cart) {
+        return new LevelCartView(cart, lastInteractor.get(cart.getUUID()), journeys);
     }
 
     /** One turn of the travel loop. Runs on the server thread, on the scheduler's interval. */
-    void poll() {
+    public void poll() {
         List<CartView> views = new ArrayList<>(tracked.size());
         for (AbstractMinecart cart : List.copyOf(tracked.values())) {
             if (cart.isRemoved()) {
@@ -203,10 +205,10 @@ final class CartTracker {
     private void reportEnd(UUID cartId, TerminationReason reason) {
         AbstractMinecart cart = tracked.get(cartId);
         String where = cart == null ? "an unloaded chunk"
-                : FabricCartView.worldIdOf(cart.level()).value() + " "
+                : LevelCartView.worldIdOf(cart.level()).value() + " "
                         + cart.blockPosition().getX() + "," + cart.blockPosition().getY()
                         + "," + cart.blockPosition().getZ();
-        String type = cart == null ? "minecart" : FabricCartView.typeOf(cart).name();
+        String type = cart == null ? "minecart" : LevelCartView.typeOf(cart).name();
         String line = "Journey ended: " + reason + " — " + type + " at " + where;
 
         // ARRIVED and WORLD_DISABLED are DEBUG in §2.1: one is the normal end of a journey and the

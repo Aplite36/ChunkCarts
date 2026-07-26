@@ -1,4 +1,4 @@
-package io.github.aplite36.chunkcarts.fabric;
+package io.github.aplite36.chunkcarts.loader;
 
 import io.github.aplite36.chunkcarts.core.platform.Clock;
 
@@ -7,7 +7,7 @@ import io.github.aplite36.chunkcarts.core.platform.Clock;
  * survive a restart, and monotonic nanos for scheduler drift, which must not jump when someone
  * adjusts the system clock.
  */
-final class SystemClock implements Clock {
+public final class SystemClock implements Clock {
 
     @Override
     public long nowMillis() {

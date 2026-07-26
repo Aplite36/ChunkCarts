@@ -1,4 +1,4 @@
-package io.github.aplite36.chunkcarts.fabric;
+package io.github.aplite36.chunkcarts.loader;
 
 import com.mojang.brigadier.CommandDispatcher;
 import com.mojang.brigadier.builder.LiteralArgumentBuilder;
@@ -25,7 +25,7 @@ import java.util.function.Supplier;
  * anything it should not be. A cluster is one row showing its cart count, so the row count
  * reconciles with {@code max-concurrent-journeys} rather than mysteriously exceeding it.
  */
-final class ChunkCartsCommand {
+public final class ChunkCartsCommand {
 
     /**
      * SPEC §10 asks for the single permission {@code chunkcarts.admin}. From 1.21.11 the game can
@@ -40,7 +40,7 @@ final class ChunkCartsCommand {
      */
     //? if >=1.21.11 {
     private static final Permission ADMIN =
-            Permission.Atom.create(Identifier.fromNamespaceAndPath(ChunkCartsFabric.MOD_ID, "admin"));
+            Permission.Atom.create(Identifier.fromNamespaceAndPath(ChunkCarts.MOD_ID, "admin"));
 
     private static final Predicate<CommandSourceStack> IS_ADMIN = source ->
             source.permissions().hasPermission(ADMIN)
@@ -48,13 +48,13 @@ final class ChunkCartsCommand {
     //?} else
     /*private static final Predicate<CommandSourceStack> IS_ADMIN = source -> source.hasPermission(2);*/
 
-    private final ChunkCartsFabric mod;
+    private final ChunkCartsMod mod;
 
-    ChunkCartsCommand(ChunkCartsFabric mod) {
+    public ChunkCartsCommand(ChunkCartsMod mod) {
         this.mod = mod;
     }
 
-    void register(CommandDispatcher<CommandSourceStack> dispatcher) {
+    public void register(CommandDispatcher<CommandSourceStack> dispatcher) {
         dispatcher.register(build("chunkcarts"));
         // No /cc alias: it collides with chat-clear commands on a great many servers (SPEC §10).
         dispatcher.register(build("ccarts"));

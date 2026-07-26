@@ -1,9 +1,8 @@
-package io.github.aplite36.chunkcarts.fabric;
+package io.github.aplite36.chunkcarts.loader;
 
 import io.github.aplite36.chunkcarts.core.CartType;
 import io.github.aplite36.chunkcarts.core.WorldId;
 import io.github.aplite36.chunkcarts.core.platform.CartView;
-import net.fabricmc.fabric.api.attachment.v1.AttachmentTarget;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.Container;
 // The minecart classes kept their names and moved to a subpackage of their own in 1.21.11.
@@ -34,14 +33,16 @@ import java.util.UUID;
  * caching, because a view is created fresh each poll and a stale position is the one error that
  * would make every downstream rule wrong at once.
  */
-final class FabricCartView implements CartView {
+final class LevelCartView implements CartView {
 
     private final AbstractMinecart cart;
     private final UUID lastInteractor;
+    private final JourneyStore journeys;
 
-    FabricCartView(AbstractMinecart cart, UUID lastInteractor) {
+    LevelCartView(AbstractMinecart cart, UUID lastInteractor, JourneyStore journeys) {
         this.cart = cart;
         this.lastInteractor = lastInteractor;
+        this.journeys = journeys;
     }
 
     AbstractMinecart entity() {
@@ -168,23 +169,20 @@ final class FabricCartView implements CartView {
     /**
      * The journey state, read from the entity's own persistent data (SPEC §7).
      *
-     * <p>Fabric's data attachments are the direct analogue of Bukkit's persistent data container:
-     * they serialise into the entity's NBT, so state dies with the entity, travels with it between
-     * dimensions, and rolls back together with the world if an admin restores a backup. That
-     * shared-fate property is the whole reason §7 puts the source of truth on the entity.
-     *
-     * <p>The cast is not defensive: Fabric API mixes {@link AttachmentTarget} into {@code Entity} at
-     * runtime, which the compiler cannot see.
+     * <p>The mechanism is the loader's — see {@link JourneyStore} — but what it must provide is
+     * fixed: data that serialises into the entity's NBT, so state dies with the entity, travels
+     * with it between dimensions, and rolls back together with the world if an admin restores a
+     * backup. That shared-fate property is the whole reason §7 puts the source of truth on the
+     * entity rather than in a file this mod keeps.
      */
     @Override
     public Optional<byte[]> readState() {
-        return Optional.ofNullable(
-                ((AttachmentTarget) cart).getAttached(ChunkCartsFabric.journeyState()));
+        return journeys.read(cart);
     }
 
     @Override
     public void writeState(byte[] state) {
-        ((AttachmentTarget) cart).setAttached(ChunkCartsFabric.journeyState(), state);
+        journeys.write(cart, state);
     }
 
     @Override

@@ -1,13 +1,21 @@
 package io.github.aplite36.chunkcarts.fabric;
 
-import com.mojang.serialization.Codec;
 import io.github.aplite36.chunkcarts.core.CartEvent;
 import io.github.aplite36.chunkcarts.core.ChunkCartsEngine;
 import io.github.aplite36.chunkcarts.core.Config;
 import io.github.aplite36.chunkcarts.core.ConfigReader;
+import io.github.aplite36.chunkcarts.loader.CartTracker;
+import io.github.aplite36.chunkcarts.loader.ChunkCarts;
+import io.github.aplite36.chunkcarts.loader.ChunkCartsCommand;
+import io.github.aplite36.chunkcarts.loader.ChunkCartsMod;
+import io.github.aplite36.chunkcarts.loader.ConfigFile;
+import io.github.aplite36.chunkcarts.loader.JourneyStore;
+import io.github.aplite36.chunkcarts.loader.JourneyTicket;
+import io.github.aplite36.chunkcarts.loader.LevelTicketBackend;
+import io.github.aplite36.chunkcarts.loader.LevelWorldQuery;
+import io.github.aplite36.chunkcarts.loader.SystemClock;
+import io.github.aplite36.chunkcarts.loader.TickScheduler;
 import net.fabricmc.api.ModInitializer;
-import net.fabricmc.fabric.api.attachment.v1.AttachmentRegistry;
-import net.fabricmc.fabric.api.attachment.v1.AttachmentType;
 import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerEntityEvents;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
@@ -15,15 +23,8 @@ import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
 import net.fabricmc.fabric.api.event.player.UseBlockCallback;
 import net.fabricmc.fabric.api.event.player.UseEntityCallback;
 import net.fabricmc.loader.api.FabricLoader;
-import net.minecraft.core.Registry;
-import net.minecraft.core.registries.BuiltInRegistries;
-//? if >=1.21.11 {
-import net.minecraft.resources.Identifier;
-//?} else
-/*import net.minecraft.resources.ResourceLocation;*/
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
-import net.minecraft.server.level.TicketType;
 import net.minecraft.world.Container;
 import net.minecraft.world.InteractionResult;
 import net.minecraft.world.entity.Entity;
@@ -32,12 +33,9 @@ import net.minecraft.world.entity.vehicle.minecart.AbstractMinecart;
 //?} else
 /*import net.minecraft.world.entity.vehicle.AbstractMinecart;*/
 import net.minecraft.world.item.MinecartItem;
-import net.minecraft.world.level.ChunkPos;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.Base64;
-import java.util.Comparator;
 import java.util.List;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -52,9 +50,9 @@ import java.util.stream.Collectors;
  * nothing is tested against. Rebuilding releases every ticket and re-reads each journey from the
  * carts themselves, which is the source of truth anyway (SPEC §7).
  */
-public final class ChunkCartsFabric implements ModInitializer {
+public final class ChunkCartsFabric implements ModInitializer, ChunkCartsMod {
 
-    public static final String MOD_ID = "chunkcarts";
+    private static final String MOD_ID = ChunkCarts.MOD_ID;
 
     private static final Logger LOGGER = LoggerFactory.getLogger(MOD_ID);
 
@@ -72,43 +70,13 @@ public final class ChunkCartsFabric implements ModInitializer {
             "cartload", "cartloader", "cartloaders", "minecartsloadchunks",
             "chunkenforcer", "keepchunks");
 
-    /**
-     * The chunk ticket, registered once and shared by every hold.
-     *
-     * <p>Flags {@code FLAG_LOADING | FLAG_SIMULATION | FLAG_KEEP_DIMENSION_ACTIVE}, which is what
-     * vanilla's ender pearl ticket uses and what a travelling cart needs: the chunk loads, it
-     * simulates, and a dimension nobody is standing in keeps ticking so a cart crossing the nether
-     * alone does not silently stop. Notably absent is {@code FLAG_PERSIST} — nothing about a held
-     * chunk should survive into the save file — and {@code FLAG_CAN_EXPIRE_IF_UNLOADED}, which is
-     * about tickets that give up before their chunk arrives.
-     *
-     * <p>The 100-tick timeout is SPEC §1.1's, and it is the crash story: the travel loop re-adds the
-     * ticket every poll, so a server that dies mid-journey drops every held chunk within five
-     * seconds instead of leaking it until someone notices.
-     *
-     * <p>Registering it in {@code BuiltInRegistries.TICKET_TYPE} is not required for a ticket that
-     * never persists, but it costs a line and it is what makes the type print as
-     * {@code chunkcarts:journey} in a debug dump instead of as an anonymous record.
-     */
-    //? if >=1.21.5 {
-    private static TicketType journeyTicket;
-    //?} else
-    /*private static TicketType<ChunkPos> journeyTicket;*/
-
-    /**
-     * The journey state, attached to the cart entity (SPEC §7). Raw bytes with a schema version in
-     * byte zero, base64-encoded because the value has to go through a {@link Codec} and a string is
-     * the one representation that is stable across every NBT and JSON backend Mojang has used. The
-     * format inside the bytes is {@code core}'s business, not this module's.
-     */
-    private static AttachmentType<byte[]> journeyState;
-
     private MinecraftServer server;
     private ChunkCartsEngine engine;
     private CartTracker tracker;
     private LevelTicketBackend tickets;
     private TickScheduler scheduler;
-    private FabricWorldQuery worlds;
+    private LevelWorldQuery worlds;
+    private JourneyStore journeys;
     private boolean debug;
 
     /** Who used a minecart item where, so the cart that appears next can be attributed to them. */
@@ -116,66 +84,12 @@ public final class ChunkCartsFabric implements ModInitializer {
 
     private record PendingPlacement(UUID player, double x, double y, double z, long gameTime) {}
 
-    //? if >=1.21.5 {
-    static TicketType journeyTicket() {
-        return journeyTicket;
-    }
-    //?} else {
-    /*static TicketType<ChunkPos> journeyTicket() {
-        return journeyTicket;
-    }
-    *///?}
-
-    static AttachmentType<byte[]> journeyState() {
-        return journeyState;
-    }
-
     @Override
     public void onInitialize() {
-        // Four generations of the same ticket, oldest last. What changes is only how the type is
-        // described — flags, then a persist boolean plus a three-valued enum, then a comparator and
-        // a timeout — and whether it lives in a registry at all. What does not change is the level
-        // arithmetic: TicketStorage and, before it, DistanceManager both build the ticket at
-        // ChunkLevel.byStatus(FULL) minus the radius, checked against the bytecode on 1.21, 1.21.4,
-        // 1.21.5 and 1.21.8. So TICKET_RADIUS means entity-ticking on every one of them.
-        //
-        // Two capabilities genuinely do not exist further back, both minor: before 1.21.9 there is
-        // no keep-dimension-active flag, so a cart crossing a dimension nobody is in relies on that
-        // dimension ticking anyway; and before 1.21.5 the type is not registered, so it prints
-        // anonymously in a debug dump.
-        // On the oldest branch the chunk position doubles as the ticket's identity value, which is
-        // what vanilla's own per-chunk tickets do there and is what makes a re-add refresh rather
-        // than stack.
-        //? if >=1.21.11 {
-        journeyTicket = Registry.register(
-                BuiltInRegistries.TICKET_TYPE,
-                Identifier.fromNamespaceAndPath(MOD_ID, "journey"),
-                new TicketType(100L, TicketType.FLAG_LOADING
-                        | TicketType.FLAG_SIMULATION
-                        | TicketType.FLAG_KEEP_DIMENSION_ACTIVE));
-        //?} elif >=1.21.9 {
-        /*journeyTicket = Registry.register(
-                BuiltInRegistries.TICKET_TYPE,
-                ResourceLocation.fromNamespaceAndPath(MOD_ID, "journey"),
-                new TicketType(100L, TicketType.FLAG_LOADING
-                        | TicketType.FLAG_SIMULATION
-                        | TicketType.FLAG_KEEP_DIMENSION_ACTIVE));
-        *///?} elif >=1.21.5 {
-        /*journeyTicket = Registry.register(
-                BuiltInRegistries.TICKET_TYPE,
-                ResourceLocation.fromNamespaceAndPath(MOD_ID, "journey"),
-                new TicketType(100L, false, TicketType.TicketUse.LOADING_AND_SIMULATION));
-        *///?} else {
-        /*journeyTicket = TicketType.create(
-                MOD_ID + "_journey", Comparator.comparingLong(ChunkPos::toLong), 100);
-        *///?}
-
-        journeyState = AttachmentRegistry.createPersistent(
-                //? if >=1.21.11 {
-                Identifier.fromNamespaceAndPath(MOD_ID, "journey"),
-                //?} else
-                /*ResourceLocation.fromNamespaceAndPath(MOD_ID, "journey"),*/
-                Codec.STRING.xmap(Base64.getDecoder()::decode, Base64.getEncoder()::encodeToString));
+        // Both are registrations, not runtime state, so they happen once here and survive
+        // /chunkcarts reload — which rebuilds everything below but must not re-register.
+        JourneyTicket.register();
+        journeys = new FabricJourneyStore();
 
         ServerLifecycleEvents.SERVER_STARTED.register(this::start);
         ServerLifecycleEvents.SERVER_STOPPING.register(startedServer -> stop());
@@ -203,11 +117,13 @@ public final class ChunkCartsFabric implements ModInitializer {
         }
     }
 
-    ChunkCartsEngine engine() {
+    @Override
+    public ChunkCartsEngine engine() {
         return engine;
     }
 
-    int heldChunkCount() {
+    @Override
+    public int heldChunkCount() {
         return tickets == null ? 0 : tickets.heldCount();
     }
 
@@ -217,7 +133,8 @@ public final class ChunkCartsFabric implements ModInitializer {
      * <p>Worth a place in {@code list} rather than hiding behind debug: it is the only in-game
      * evidence for the claim no unit test can reach, that held chunks actually tick.
      */
-    String heldChunkLevels() {
+    @Override
+    public String heldChunkLevels() {
         if (tickets == null) {
             return "";
         }
@@ -226,7 +143,8 @@ public final class ChunkCartsFabric implements ModInitializer {
                 .collect(Collectors.joining(", "));
     }
 
-    boolean toggleDebug() {
+    @Override
+    public boolean toggleDebug() {
         debug = !debug;
         if (tracker != null) {
             tracker.setDebug(debug);
@@ -238,7 +156,8 @@ public final class ChunkCartsFabric implements ModInitializer {
     }
 
     /** Tears the runtime down and builds it again from the file on disk (SPEC §10). */
-    void reloadRuntime() {
+    @Override
+    public void reloadRuntime() {
         MinecraftServer running = server;
         stop();
         if (running != null) {
@@ -251,17 +170,17 @@ public final class ChunkCartsFabric implements ModInitializer {
     private void start(MinecraftServer startedServer) {
         server = startedServer;
 
-        ConfigReader.Result parsed = ConfigReader.read(ConfigFile.load(LOGGER));
+        ConfigReader.Result parsed = ConfigReader.read(ConfigFile.load(LOGGER, FabricLoader.getInstance().getConfigDir()));
         parsed.warnings().forEach(LOGGER::warn);
 
         Config config = parsed.builder().build();
-        worlds = new FabricWorldQuery(startedServer);
+        worlds = new LevelWorldQuery(startedServer);
         tickets = new LevelTicketBackend(worlds, LOGGER);
         engine = new ChunkCartsEngine(config, worlds, tickets, new SystemClock());
         engine.startupWarnings().forEach(LOGGER::warn);
         engine.setPlayersOnline(!startedServer.getPlayerList().getPlayers().isEmpty());
 
-        tracker = new CartTracker(engine, startedServer, LOGGER);
+        tracker = new CartTracker(engine, startedServer, LOGGER, journeys);
 
         // Carts already sitting in loaded levels. On a first boot there are none, but on a reload
         // the world is already populated and ENTITY_LOAD has long since fired for all of them.

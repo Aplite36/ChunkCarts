@@ -14,6 +14,24 @@ val mc = stonecutter.current.version
 
 val snakeyamlVersion = "2.6"
 
+// The Minecraft-facing half of the adapter, shared with the other loader branches. Everything in
+// here imports net.minecraft and nothing else, so it compiles identically under every loader; what
+// is loader-specific — the entrypoint, events, the journey attachment, the config directory —
+// stays in this branch's own src/. Stonecutter preprocesses it per node exactly as it does src/,
+// which is what lets one copy span the four 1.21.x API generations.
+//
+// A source directory, deliberately not a Gradle project: a shared *project* would need its own
+// Minecraft dependency and its own Stonecutter node tree, which is the cross-loader abstraction
+// layer this project has ruled out.
+// The Minecraft-facing half of the adapter lives in loader/common/src and is shared with the
+// other loader branches; src/main/java/.../chunkcarts/loader is a symlink to it.
+//
+// It has to be a symlink rather than an extra srcDir. Stonecutter only preprocesses two roots —
+// the branch's src/ and the node's src/, both hard-coded in configureSource — so a directory
+// added with java.srcDir() reaches javac with its comment markers intact. That is not a compile
+// error on the newest target, whose active branches already match the committed text; it fails
+// only on the older ones, which is an expensive way to find out.
+
 // 26.1 is the first fully unobfuscated release. Verified, not assumed: Mojang's version
 // manifest lists `server_mappings` for 1.21.11 and does not for 26.1 or 26.2.
 //

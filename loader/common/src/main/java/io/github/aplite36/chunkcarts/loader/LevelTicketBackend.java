@@ -1,4 +1,4 @@
-package io.github.aplite36.chunkcarts.fabric;
+package io.github.aplite36.chunkcarts.loader;
 
 import io.github.aplite36.chunkcarts.core.WorldId;
 import io.github.aplite36.chunkcarts.core.platform.ChunkTicketBackend;
@@ -32,7 +32,7 @@ import java.util.Set;
  * settled. That converts a derivation into a runtime check that keeps working on versions nobody has
  * tested yet.
  */
-final class LevelTicketBackend implements ChunkTicketBackend {
+public final class LevelTicketBackend implements ChunkTicketBackend {
 
     /**
      * Level {@code 33 - 2 = 31}, which is {@code ChunkLevel.ENTITY_TICKING_LEVEL}. Not a tuning
@@ -65,7 +65,7 @@ final class LevelTicketBackend implements ChunkTicketBackend {
      */
     private static final int REFRESH_TICKS = 40;
 
-    private final FabricWorldQuery worlds;
+    private final LevelWorldQuery worlds;
     private final Logger log;
 
     /** What we believe we are holding, so a release cannot drift from a hold. */
@@ -80,19 +80,19 @@ final class LevelTicketBackend implements ChunkTicketBackend {
 
     private record Held(String world, int cx, int cz) {}
 
-    LevelTicketBackend(FabricWorldQuery worlds, Logger log) {
+    public LevelTicketBackend(LevelWorldQuery worlds, Logger log) {
         this.worlds = worlds;
         this.log = log;
     }
 
-    void setDebug(boolean debug) {
+    public void setDebug(boolean debug) {
         this.debug = debug;
         if (debug) {
             levelVerified = false;  // re-sample on demand, so an admin can check any version
         }
     }
 
-    int heldCount() {
+    public int heldCount() {
         return held.size();
     }
 
@@ -125,9 +125,9 @@ final class LevelTicketBackend implements ChunkTicketBackend {
         ChunkPos pos = new ChunkPos(chunk.cx(), chunk.cz());
         //? if >=1.21.5 {
         level.getChunkSource().addTicketWithRadius(
-                ChunkCartsFabric.journeyTicket(), pos, TICKET_RADIUS);
+                JourneyTicket.get(), pos, TICKET_RADIUS);
         //?} else
-        /*level.getChunkSource().addRegionTicket(ChunkCartsFabric.journeyTicket(), pos, TICKET_RADIUS, pos);*/
+        /*level.getChunkSource().addRegionTicket(JourneyTicket.get(), pos, TICKET_RADIUS, pos);*/
         return true;
     }
 
@@ -138,9 +138,9 @@ final class LevelTicketBackend implements ChunkTicketBackend {
             ChunkPos pos = new ChunkPos(cx, cz);
             //? if >=1.21.5 {
             level.getChunkSource().removeTicketWithRadius(
-                    ChunkCartsFabric.journeyTicket(), pos, TICKET_RADIUS);
+                    JourneyTicket.get(), pos, TICKET_RADIUS);
             //?} else
-            /*level.getChunkSource().removeRegionTicket(ChunkCartsFabric.journeyTicket(), pos, TICKET_RADIUS, pos);*/
+            /*level.getChunkSource().removeRegionTicket(JourneyTicket.get(), pos, TICKET_RADIUS, pos);*/
         }
         held.remove(new Held(world.value(), cx, cz));
     }
@@ -181,7 +181,7 @@ final class LevelTicketBackend implements ChunkTicketBackend {
      * Driven from the server tick: renews the tickets, and runs the settle timer for the one-off
      * level check. Both need a per-tick pulse and there is no delayed-task scheduler here.
      */
-    void tick() {
+    public void tick() {
         if (--refreshCountdown <= 0) {
             refreshCountdown = REFRESH_TICKS;
             for (Held chunk : held) {
@@ -227,7 +227,7 @@ final class LevelTicketBackend implements ChunkTicketBackend {
      * one level low. Persistent lower levels, or lower levels on a cart that is standing still, are
      * the real thing.
      */
-    Map<FullChunkStatus, Integer> heldLevels() {
+    public Map<FullChunkStatus, Integer> heldLevels() {
         Map<FullChunkStatus, Integer> tally = new EnumMap<>(FullChunkStatus.class);
         for (Held chunk : held) {
             tally.merge(statusOf(chunk), 1, Integer::sum);

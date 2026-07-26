@@ -1,4 +1,4 @@
-package io.github.aplite36.chunkcarts.fabric;
+package io.github.aplite36.chunkcarts.loader;
 
 import io.github.aplite36.chunkcarts.core.WorldId;
 import io.github.aplite36.chunkcarts.core.platform.CartView;
@@ -21,7 +21,7 @@ import java.util.concurrent.CompletableFuture;
 /**
  * The read-only half of the platform surface (SPEC §1.1).
  */
-final class FabricWorldQuery implements WorldQuery {
+public final class LevelWorldQuery implements WorldQuery {
 
     /**
      * How many "this chunk exists on disk" answers to remember. Each entry is a long and a boolean;
@@ -46,10 +46,10 @@ final class FabricWorldQuery implements WorldQuery {
         }
     };
 
-    FabricWorldQuery(MinecraftServer server) {
+    public LevelWorldQuery(MinecraftServer server) {
         this.server = server;
         for (ServerLevel level : server.getAllLevels()) {
-            levels.put(FabricCartView.worldIdOf(level).value(), level);
+            levels.put(LevelCartView.worldIdOf(level).value(), level);
         }
     }
 

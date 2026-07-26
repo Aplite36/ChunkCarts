@@ -1,6 +1,5 @@
-package io.github.aplite36.chunkcarts.fabric;
+package io.github.aplite36.chunkcarts.loader;
 
-import net.fabricmc.loader.api.FabricLoader;
 import org.slf4j.Logger;
 import org.yaml.snakeyaml.LoaderOptions;
 import org.yaml.snakeyaml.Yaml;
@@ -28,13 +27,18 @@ import java.util.Map;
  * <p>{@link SafeConstructor} rather than the default: a config file must not be able to name a Java
  * class to instantiate.
  */
-final class ConfigFile {
+public final class ConfigFile {
 
     private ConfigFile() {
     }
 
-    static Path path() {
-        return FabricLoader.getInstance().getConfigDir().resolve(ChunkCartsFabric.MOD_ID + ".yml");
+    /**
+     * <p>The directory is the loader's, because each one puts it somewhere different; the file name
+     * inside it is not, so {@code chunkcarts.yml} is the same path relative to the config folder on
+     * every platform.
+     */
+    static Path path(Path configDir) {
+        return configDir.resolve(ChunkCarts.MOD_ID + ".yml");
     }
 
     /**
@@ -46,8 +50,8 @@ final class ConfigFile {
      * matter.
      */
     @SuppressWarnings("unchecked")
-    static Map<String, Object> load(Logger log) {
-        Path path = path();
+    public static Map<String, Object> load(Logger log, Path configDir) {
+        Path path = path(configDir);
         if (!Files.exists(path)) {
             writeDefault(path, log);
         }

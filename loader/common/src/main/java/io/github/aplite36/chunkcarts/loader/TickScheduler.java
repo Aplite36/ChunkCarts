@@ -1,4 +1,4 @@
-package io.github.aplite36.chunkcarts.fabric;
+package io.github.aplite36.chunkcarts.loader;
 
 import io.github.aplite36.chunkcarts.core.platform.Scheduler;
 import net.minecraft.server.MinecraftServer;
@@ -29,7 +29,7 @@ import java.util.Map;
  * the loop should run more often and tells its TPS monitor the same number. Nothing in this class
  * may change an interval on its own initiative.
  */
-final class TickScheduler {
+public final class TickScheduler {
 
     private final Map<String, Entry> tasks = new LinkedHashMap<>();
 
@@ -48,16 +48,16 @@ final class TickScheduler {
     }
 
     /** The {@link Scheduler} view handed to {@code core}. */
-    Scheduler asScheduler() {
+    public Scheduler asScheduler() {
         return this::repeating;
     }
 
-    void repeating(String name, int intervalTicks, Runnable task) {
+    public void repeating(String name, int intervalTicks, Runnable task) {
         tasks.put(name, new Entry(name, task, Math.max(1, intervalTicks)));
     }
 
     /** The interval a named task is currently running at, or 0 if there is no such task. */
-    int intervalOf(String name) {
+    public int intervalOf(String name) {
         Entry entry = tasks.get(name);
         return entry == null ? 0 : entry.intervalTicks;
     }
@@ -70,7 +70,7 @@ final class TickScheduler {
      * for a cart that is already moving too fast — waiting out the interval we just decided was too
      * long is the one thing this must not do.
      */
-    void reschedule(String name, int intervalTicks) {
+    public void reschedule(String name, int intervalTicks) {
         Entry entry = tasks.get(name);
         if (entry == null || entry.intervalTicks == intervalTicks) {
             return;
@@ -79,7 +79,7 @@ final class TickScheduler {
         entry.countdown = Math.min(entry.countdown, entry.intervalTicks);
     }
 
-    void cancelAll() {
+    public void cancelAll() {
         tasks.clear();
     }
 
@@ -88,7 +88,7 @@ final class TickScheduler {
      * means by "name it — profilers": on this platform the name reaches {@code /debug} output and
      * spark reports, so a server owner can see what ChunkCarts costs without instrumenting it.
      */
-    void tick(MinecraftServer server) {
+    public void tick(MinecraftServer server) {
         // Snapshot: a task body may reschedule itself, and the §5 clamp does exactly that.
         for (Entry entry : List.copyOf(tasks.values())) {
             if (--entry.countdown > 0) {
