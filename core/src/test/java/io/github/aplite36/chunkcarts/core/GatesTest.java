@@ -9,6 +9,8 @@ import java.util.EnumSet;
 import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /** SPEC §4 departure gates, plus the in-flight re-checks from §5 step 4. */
 @DisplayName("§4 departure gates")
@@ -117,5 +119,65 @@ class GatesTest extends EngineTest {
 
         assertEquals(JourneyState.TRAVELLING, journeyOf(traveller).state(),
                 "interrupting a journey in flight would strand the cart mid-route");
+    }
+
+    // ---- departure-requirement: PLAYER_ONLINE (§6) ---------------------------------------------
+    //
+    // The one gate whose input the fakes cannot produce: nothing on the §1.1 platform surface can
+    // answer "is any player online anywhere", so the adapter pushes it in with setPlayersOnline
+    // from the join and quit events. These four tests are what let the tier be advertised as
+    // supported rather than merely present in the enum.
+
+    @Test
+    @DisplayName("PLAYER_ONLINE lets an unseen cart depart while someone is online")
+    void playerOnlineAllowsDepartureWithoutAToken() {
+        // The whole point of the tier: a relay leg starting at an unattended station, with no
+        // player ever near the cart. Under PLAYER_SEEN this same cart is denied NO_TOKEN.
+        cfg.departureRequirement(DepartureRequirement.PLAYER_ONLINE);
+        FakeCart cart = FakeCart.at(OVERWORLD, 0, 0);
+        engine().setPlayersOnline(true);
+
+        assertDeparted(depart(cart));
+        assertFalse(engine().hasToken(cart.id()), "no player was ever near it to grant one");
+    }
+
+    @Test
+    @DisplayName("PLAYER_ONLINE blocks departure once the server empties")
+    void playerOnlineBlocksDepartureOnAnEmptyServer() {
+        // "Goes completely quiet overnight" is the promise config.yml makes for this tier.
+        cfg.departureRequirement(DepartureRequirement.PLAYER_ONLINE);
+        FakeCart cart = FakeCart.at(OVERWORLD, 0, 0);
+        grantToken(cart);
+        engine().setPlayersOnline(false);
+
+        assertDenied(depart(cart), DenialReason.DEPARTURE_REQUIREMENT);
+        assertTrue(engine().hasToken(cart.id()),
+                "a denial is not a termination and must cost the cart nothing");
+    }
+
+    @Test
+    @DisplayName("PLAYER_ONLINE resumes departures when a player logs back in")
+    void playerOnlineResumesDeparturesWhenAPlayerRejoins() {
+        cfg.departureRequirement(DepartureRequirement.PLAYER_ONLINE);
+        FakeCart cart = FakeCart.at(OVERWORLD, 0, 0);
+        engine().setPlayersOnline(false);
+        assertDenied(depart(cart), DenialReason.DEPARTURE_REQUIREMENT);
+
+        engine().setPlayersOnline(true);
+
+        assertDeparted(depart(cart));
+    }
+
+    @Test
+    @DisplayName("the online flag is ignored under PLAYER_SEEN")
+    void playersOnlineFlagIsIgnoredUnderPlayerSeen() {
+        // An adapter that pushes the flag unconditionally must not silently add a gate to the
+        // default tier. A cart loaded at a station keeps departing after the last player quits;
+        // its token is what authorises it, and the token has already been earned.
+        FakeCart cart = FakeCart.at(OVERWORLD, 0, 0);
+        grantToken(cart);
+        engine().setPlayersOnline(false);
+
+        assertDeparted(depart(cart));
     }
 }
