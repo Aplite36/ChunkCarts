@@ -217,6 +217,14 @@ public final class ChunkCartsEngine {
     }
 
     /**
+     * The interval the travel loop should currently be running at (SPEC §5), which is the
+     * configured value clamped downward on observed velocity. The adapter reschedules to match.
+     */
+    public int effectivePollIntervalTicks() {
+        return config.pollIntervalTicks();
+    }
+
+    /**
      * Re-registers a cart from its persisted state on chunk load (SPEC §7), giving it a fresh
      * pause window (SPEC §7.1) while leaving its cooldown and interaction timestamps alone.
      */

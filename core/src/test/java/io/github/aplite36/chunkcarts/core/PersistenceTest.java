@@ -127,6 +127,98 @@ class PersistenceTest extends EngineTest {
         assertTerminated(cart, TerminationReason.ARRIVED);
     }
 
+    // ---- flush freshness (SPEC §7) ------------------------------------------------------------
+
+    /** What is actually on the entity right now, which is the source of truth §7 cares about. */
+    private JourneyRecord persisted(FakeCart cart) {
+        return cart.readState().flatMap(codec::decode)
+                .orElseThrow(() -> new AssertionError("expected persisted state on " + cart.id()));
+    }
+
+    /** A second engine over the same carts: what a restart or {@code /chunkcarts reload} does. */
+    private ChunkCartsEngine restarted() {
+        return new ChunkCartsEngine(config(), world, tickets, clock);
+    }
+
+    @Test
+    @DisplayName("a new distance record is flushed immediately")
+    void newDistanceRecordIsFlushedImmediately() {
+        FakeCart cart = FakeCart.at(OVERWORLD, 0, 0);
+        departWithToken(cart);
+
+        travelStraight(cart, 3);
+
+        assertEquals(3, journeyOf(cart).distanceRecord(), "precondition: the live record moved");
+        assertEquals(3, persisted(cart).distanceRecord(),
+                "§7 flushes on a new record; a journey restored from this must not come back at 0");
+    }
+
+    @Test
+    @DisplayName("slack is flushed on a slow timer even without a new record")
+    void slackIsFlushedOnSlowTimerWithoutNewRecord() {
+        cfg.progressSlackChunks(64);
+        FakeCart cart = FakeCart.at(OVERWORLD, 0, 0);
+        departWithToken(cart);
+        travelStraight(cart, 4);
+
+        // Shuffling between two chunks it has already reached: never a new record, so nothing here
+        // is a transition. Only the timer can carry this to disk, and without it a restart hands
+        // the journey back its whole slack allowance — the loop rule getting quietly weaker.
+        for (int i = 0; i < 20; i++) {
+            cart.atChunk(i % 2 == 0 ? 3 : 4, 0);
+            tickPoll(cart);
+        }
+
+        assertEquals(4, journeyOf(cart).distanceRecord(), "precondition: no new record was set");
+        assertTrue(journeyOf(cart).slackUsed() > 0, "precondition: the live journey used slack");
+        assertEquals(journeyOf(cart).slackUsed(), persisted(cart).slackUsed(),
+                "a journey that loses its slack on every restart hands a loop a fresh allowance");
+    }
+
+    @Test
+    @DisplayName("state is not written every poll")
+    void stateIsNotWrittenEveryPoll() {
+        // The other half of the rule §7 states outright: the in-memory index is the per-poll one,
+        // and PDC is written on transitions and a slow timer. A flush per poll would satisfy every
+        // freshness test above by writing constantly, on every cart, twice a second.
+        cfg.pauseTolerance(Duration.ofSeconds(30));
+        FakeCart cart = FakeCart.at(OVERWORLD, 0, 0);
+        departWithToken(cart);
+        int afterDeparture = cart.writeCount();
+
+        // Standing still inside the pause tolerance: one PAUSED transition, then nothing to report.
+        cart.velocity(0.0);
+        int polls = 20;
+        for (int i = 0; i < polls; i++) {
+            tickPoll(cart);
+        }
+
+        int writes = cart.writeCount() - afterDeparture;
+        assertTrue(writes < polls / 2,
+                "expected transition and timer flushes, got " + writes + " writes in " + polls
+                        + " polls — that is a write per poll in all but name");
+    }
+
+    @Test
+    @DisplayName("a journey restored mid-flight keeps its record, slack and budget")
+    void restoredMidFlightJourneyKeepsRecordSlackAndBudget() {
+        // The step-4 symptom: reload a server mid-journey and /chunkcarts list showed record 0,
+        // because the only flushes were at departure and at ARRIVED.
+        FakeCart cart = FakeCart.at(OVERWORLD, 0, 0);
+        departWithToken(cart);
+        travelStraight(cart, 5);
+        JourneySnapshot before = journeyOf(cart);
+
+        ChunkCartsEngine afterRestart = restarted();
+        afterRestart.restore(cart);
+        JourneySnapshot after = afterRestart.journeyOf(cart.id())
+                .orElseThrow(() -> new AssertionError("expected the journey to be restored"));
+
+        assertEquals(before.distanceRecord(), after.distanceRecord());
+        assertEquals(before.slackUsed(), after.slackUsed());
+        assertEquals(before.budgetRemaining(), after.budgetRemaining());
+    }
+
     @Test
     @DisplayName("the cooldown is not reset by a restart")
     void cooldownIsNotResetByRestart() {

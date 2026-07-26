@@ -24,6 +24,7 @@ public final class FakeCart implements CartView {
     private CartType type = CartType.NORMAL;
     private int itemCount;
     private byte[] state;
+    private int writes;
     private UUID lastInteractor;
 
     public FakeCart(WorldId world) {
@@ -43,7 +44,7 @@ public final class FakeCart implements CartView {
     @Override public CartType type() { return type; }
     @Override public int itemCount() { return itemCount; }
     @Override public Optional<byte[]> readState() { return Optional.ofNullable(state); }
-    @Override public void writeState(byte[] s) { this.state = s; }
+    @Override public void writeState(byte[] s) { this.state = s; this.writes++; }
     @Override public Optional<UUID> lastInteractor() { return Optional.ofNullable(lastInteractor); }
 
     /** Places the cart at the centre of the given chunk. */
@@ -57,6 +58,15 @@ public final class FakeCart implements CartView {
         this.x = bx;
         this.z = bz;
         return this;
+    }
+
+    /**
+     * How many times state has been written. SPEC §7 forbids a PDC write per poll, and a flush
+     * that is merely <em>often enough</em> to satisfy the freshness tests would pass them by
+     * writing constantly — so the freshness rules need this to be pinned from the other side too.
+     */
+    public int writeCount() {
+        return writes;
     }
 
     public int chunkX() {
