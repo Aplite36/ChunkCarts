@@ -65,9 +65,22 @@ final class BukkitCartView implements CartView {
         return cart.getLocation().getZ();
     }
 
+    /**
+     * Ground speed in blocks/tick, which is <em>not</em> the length of the motion vector.
+     *
+     * <p>Measured on Paper 1.21.11: a cart on a continuously powered rail line reports a motion
+     * vector of 1.5 while covering about 0.43 blocks a tick. The vector is the boost the rails
+     * applied, before the game clamps movement to the cart's max speed — intent, not displacement.
+     * Reading it raw makes an ordinary booster track look like a speed plugin, which under-reports
+     * nothing but over-reacts everywhere: §5 would halve the poll interval on a stock server for no
+     * gain, and §3.4 would call a stopped cart moving.
+     *
+     * <p>{@code getMaxSpeed()} is the clamp the game itself applies, so the smaller of the two is
+     * the honest answer. Speed-modifying plugins raise it, which is exactly when §5 should fire.
+     */
     @Override
     public double velocity() {
-        return cart.getVelocity().length();
+        return Math.min(cart.getVelocity().length(), cart.getMaxSpeed());
     }
 
     @Override

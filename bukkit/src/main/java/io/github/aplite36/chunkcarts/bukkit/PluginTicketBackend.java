@@ -111,6 +111,15 @@ final class PluginTicketBackend implements ChunkTicketBackend {
     private void verifyEntityTicking(World world, int cx, int cz) {
         levelVerified = true;
         plugin.getServer().getScheduler().runTaskLater(plugin, () -> {
+            if (!held.contains(new Held(world.getName(), cx, cz))) {
+                // The cart moved on and this chunk was released inside the settle window — its level
+                // is decaying because we let it go, which is the system working. Measured on a
+                // travelling cart, where the first chunk held is behind the region within a second.
+                // Re-arm rather than pass: a check that reports success on a released chunk is worse
+                // than no check, and the next hold gets a fresh window.
+                levelVerified = false;
+                return;
+            }
             Chunk.LoadLevel level = world.getChunkAt(cx, cz).getLoadLevel();
             if (level == Chunk.LoadLevel.ENTITY_TICKING) {
                 if (debug) {
