@@ -31,6 +31,8 @@ public final class ChunkCartsPlugin extends JavaPlugin {
             "CartLoad", "CartLoader", "CartLoaders", "MinecartsLoadChunks",
             "ChunkEnforcer", "KeepChunks");
 
+    private static final String TRAVEL_LOOP = "chunkcarts-travel-loop";
+
     private NamespacedKey stateKey;
     private ChunkCartsEngine engine;
     private CartTracker tracker;
@@ -123,8 +125,27 @@ public final class ChunkCartsPlugin extends JavaPlugin {
         }
 
         scheduler = new BukkitTaskScheduler(this);
-        scheduler.repeating("chunkcarts-travel-loop", engine.config().pollIntervalTicks(),
-                tracker::poll);
+        scheduler.repeating(TRAVEL_LOOP, engine.effectivePollIntervalTicks(), this::runTravelLoop);
+    }
+
+    /**
+     * One cycle of the travel loop, plus the §5 velocity clamp the engine asked for.
+     *
+     * <p>The interval is read after the cycle, not before: departures happen at the end of a cycle,
+     * and a cart fast enough to need a shorter interval usually announces itself by departing. The
+     * engine is the only thing that may choose this number, because the same number is what its TPS
+     * monitor expects the gap between polls to be (SPEC §4.2).
+     */
+    private void runTravelLoop() {
+        tracker.poll();
+        int wanted = engine.effectivePollIntervalTicks();
+        if (wanted != scheduler.intervalOf(TRAVEL_LOOP)) {
+            if (debug) {
+                getLogger().info("Travel loop interval now " + wanted + " tick(s) — clamped from "
+                        + engine.config().pollIntervalTicks() + " on observed cart velocity.");
+            }
+            scheduler.reschedule(TRAVEL_LOOP, wanted);
+        }
     }
 
     private void stop() {

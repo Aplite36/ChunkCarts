@@ -30,6 +30,37 @@ public final class ChunkCartsEngine {
      */
     static final Duration UNLOAD_COMPLETION_QUIET_PERIOD = Duration.ofSeconds(10);
 
+    /**
+     * How often a journey that is neither transitioning nor setting records still reaches the
+     * entity (SPEC §7). PDC is the source of truth and the in-memory index is the cache, so the
+     * cost of a crash is bounded by this: a few seconds of slack and budget, never the whole
+     * journey. Writing per poll instead would be a PDC write per cart twice a second forever.
+     */
+    static final Duration STATE_FLUSH_INTERVAL = Duration.ofSeconds(5);
+
+    /**
+     * The floor under the §5 velocity clamp. At one tick the travel loop runs as often as the
+     * server ticks, and anything faster than that region-radius cannot save.
+     */
+    static final int MIN_POLL_INTERVAL_TICKS = 1;
+
+    /**
+     * How long a longer interval must stay warranted before the loop actually slows back down.
+     * Velocity wobbles constantly — around corners, up inclines, over a booster — and following it
+     * upward at once would reschedule the task every few polls and hand the TPS monitor a stream of
+     * samples whose expected interval kept moving underneath them.
+     */
+    static final Duration INTERVAL_GROWTH_SETTLE = Duration.ofSeconds(5);
+
+    /**
+     * The share of a region's outward margin a cart may cover between two polls. A cart sitting at
+     * the edge of its own chunk has {@code regionRadius × 16} blocks of held terrain ahead of it;
+     * spending half of that per poll leaves a whole poll of margin for the one after.
+     */
+    private static final double MARGIN_SHARE_PER_POLL = 0.5;
+
+    private static final long NEVER = Long.MIN_VALUE;
+
     private final Config config;
     private final List<String> startupWarnings;
     private final WorldQuery world;
@@ -54,6 +85,12 @@ public final class ChunkCartsEngine {
      */
     private boolean playersOnline = true;
 
+    /** The interval the travel loop should be running at right now (SPEC §5). */
+    private int pollIntervalTicks;
+
+    /** When a longer interval first became warranted, for {@link #INTERVAL_GROWTH_SETTLE}. */
+    private long growEligibleSince = NEVER;
+
     public ChunkCartsEngine(Config config, WorldQuery world, ChunkTicketBackend tickets, Clock clock) {
         Objects.requireNonNull(config, "config");
         Config.Resolution resolution = config.resolve();
@@ -63,6 +100,7 @@ public final class ChunkCartsEngine {
         this.tickets = Objects.requireNonNull(tickets, "tickets");
         this.clock = Objects.requireNonNull(clock, "clock");
         this.tps = new TpsMonitor(this.config.minTps());
+        this.pollIntervalTicks = this.config.pollIntervalTicks();
     }
 
     /** The config actually in force, after the §3.5 clamps and floors. */
@@ -162,6 +200,11 @@ public final class ChunkCartsEngine {
         // first poll terminates it as UNGENERATED_CHUNK, which is where §5 puts that check.
         syncRegion(journey, cluster, true);
         flush(journey, cluster);
+
+        // Before the first poll rather than after it. Polls are where the clamp normally lives, but
+        // the gap this cluster is about to cross is the one between now and the next poll, and a
+        // fast cart would spend that gap at whatever interval the last poll left behind.
+        shrinkTo(targetPollInterval(fastest(cluster)));
         return new DepartureOutcome.Departed(journey.id);
     }
 
@@ -170,7 +213,9 @@ public final class ChunkCartsEngine {
      * so it must be called on the scheduler's interval rather than ad hoc.
      */
     public void poll(List<CartView> carts) {
-        tps.sample(clock.nanoTime(), config.pollIntervalTicks());
+        // Sampled against the interval that was in force over the gap just elapsed, which is what
+        // the field still holds: the clamp below only moves it once this poll is done.
+        tps.sample(clock.nanoTime(), pollIntervalTicks);
 
         Map<UUID, CartView> views = new HashMap<>();
         for (CartView cart : carts) {
@@ -187,6 +232,8 @@ public final class ChunkCartsEngine {
                 travel(journey, lead, views);
             }
         }
+
+        updatePollInterval(carts);
     }
 
     /** Every journey holding chunks, including PAUSED and HOLDING ones. */
@@ -217,11 +264,17 @@ public final class ChunkCartsEngine {
     }
 
     /**
-     * The interval the travel loop should currently be running at (SPEC §5), which is the
-     * configured value clamped downward on observed velocity. The adapter reschedules to match.
+     * The interval the travel loop should currently be running at (SPEC §5): the configured value,
+     * clamped downward on observed velocity. The adapter reads this after each cycle and
+     * reschedules when it changes.
+     *
+     * <p>This is decided here rather than in the adapter because §4.2 measures TPS as the ratio of
+     * the expected gap between polls to the actual one, and the expected gap <em>is</em> this
+     * number. An adapter that quietly rescheduled itself faster would read as a server running at a
+     * fraction of its speed, and would answer a fast cart by denying every departure on the server.
      */
     public int effectivePollIntervalTicks() {
-        return config.pollIntervalTicks();
+        return pollIntervalTicks;
     }
 
     /**
@@ -380,6 +433,7 @@ public final class ChunkCartsEngine {
     private void travel(Journey journey, CartView lead, Map<UUID, CartView> views) {
         long now = clock.nowMillis();
         ChunkPos leadChunk = chunkOf(lead);
+        JourneyState stateBefore = journey.state;
 
         dropDrifters(journey, lead, leadChunk, views);
 
@@ -420,6 +474,7 @@ public final class ChunkCartsEngine {
         }
 
         boolean progressed = transited || !leadChunk.equals(journey.lastChunk);
+        boolean newRecord = false;
 
         // The progress rule (§3.1). A closed track of any diameter sets its record on the first lap
         // and can never beat it, so it always dies within the slack allowance.
@@ -428,6 +483,7 @@ public final class ChunkCartsEngine {
             if (distance > journey.distanceRecord) {
                 journey.distanceRecord = distance;
                 journey.slackUsed = 0;
+                newRecord = true;
             } else {
                 journey.slackUsed += leadChunk.chebyshevTo(journey.lastChunk);
             }
@@ -453,6 +509,81 @@ public final class ChunkCartsEngine {
             journey.state = lead.velocity() < config.minSpeed()
                     ? JourneyState.PAUSED : JourneyState.TRAVELLING;
         }
+
+        // Reached only by a journey that survived this poll: the terminating paths above have
+        // already flushed or released. A new record or a state change is a §7 transition and goes
+        // out at once; everything else — slack, budget — rides the timer.
+        boolean transition = transited || newRecord || journey.state != stateBefore;
+        if (transition || now - journey.lastFlushAt >= STATE_FLUSH_INTERVAL.toMillis()) {
+            flush(journey, membersPresent(journey, views));
+        }
+    }
+
+    // ---- the §5 velocity clamp on the poll interval --------------------------------------------
+
+    /**
+     * Brings the poll interval in line with the fastest cart in flight.
+     *
+     * <p>Vanilla carts cap at 0.4 blocks/tick, so nothing here ever fires on a vanilla server: at
+     * {@code region-radius: 1} a cart would have to exceed 0.8 blocks/tick before ten ticks were
+     * too long a gap. Speed-modifying plugins exist though, and a cart that crosses its whole held
+     * region between two polls arrives in terrain nothing is holding and strands itself there.
+     */
+    private void updatePollInterval(List<CartView> carts) {
+        int target = targetPollInterval(fastestInFlight(carts));
+        if (target < pollIntervalTicks) {
+            shrinkTo(target);  // the next poll is the one that strands; there is nothing to wait for
+        } else if (target > pollIntervalTicks) {
+            long now = clock.nowMillis();
+            if (growEligibleSince == NEVER) {
+                growEligibleSince = now;
+            } else if (now - growEligibleSince >= INTERVAL_GROWTH_SETTLE.toMillis()) {
+                pollIntervalTicks = target;
+                growEligibleSince = NEVER;
+            }
+        } else {
+            growEligibleSince = NEVER;
+        }
+    }
+
+    private void shrinkTo(int target) {
+        if (target < pollIntervalTicks) {
+            pollIntervalTicks = target;
+            growEligibleSince = NEVER;
+        }
+    }
+
+    /** Never above the configured interval: §5 clamps downward, and the admin set a resolution. */
+    private int targetPollInterval(double fastest) {
+        if (fastest <= 0.0) {
+            return config.pollIntervalTicks();
+        }
+        double margin = config.regionRadius() * 16.0 * MARGIN_SHARE_PER_POLL;
+        int ticks = (int) Math.floor(margin / fastest);
+        return Math.max(MIN_POLL_INTERVAL_TICKS, Math.min(config.pollIntervalTicks(), ticks));
+    }
+
+    private double fastestInFlight(List<CartView> carts) {
+        double fastest = 0.0;
+        for (CartView cart : carts) {
+            if (journeyByCart.containsKey(cart.id())) {
+                fastest = Math.max(fastest, cart.velocity());
+            }
+        }
+        return fastest;
+    }
+
+    /**
+     * The fastest of a group, regardless of whether it is travelling. Only used at departure, where
+     * the cluster is travelling by definition — a parked cart on a fast track must not be allowed
+     * to hold the whole server's travel loop at its own interval.
+     */
+    private static double fastest(List<CartView> carts) {
+        double fastest = 0.0;
+        for (CartView cart : carts) {
+            fastest = Math.max(fastest, cart.velocity());
+        }
+        return fastest;
     }
 
     /**
@@ -639,10 +770,12 @@ public final class ChunkCartsEngine {
     // ---- persistence (SPEC §7) ----------------------------------------------------------------
 
     /**
-     * Writes journey state to the entity. PDC/NBT is the source of truth and the in-memory index
-     * is a cache, so this happens on transitions — departure, termination — and never per poll.
+     * Writes journey state to the entity. PDC/NBT is the source of truth and the in-memory index is
+     * a cache, so this happens on the §7 transitions — departure, a new record, termination — and
+     * otherwise on {@link #STATE_FLUSH_INTERVAL}, never per poll.
      */
     private void flush(Journey journey, List<CartView> members) {
+        journey.lastFlushAt = clock.nowMillis();
         for (CartView member : members) {
             CartState state = cartState(member.id());
             member.writeState(codec.encode(journey.toRecord(state.token,

@@ -46,14 +46,16 @@ final class ChunkCartsCommand implements CommandExecutor, TabCompleter {
         if (journeys.isEmpty()) {
             sender.sendMessage("[ChunkCarts] No active journeys. "
                     + plugin.heldChunkCount() + " chunks held, "
-                    + String.format(Locale.ROOT, "%.1f", engine.effectiveTps()) + " TPS.");
+                    + String.format(Locale.ROOT, "%.1f", engine.effectiveTps()) + " TPS"
+                    + clampedInterval(engine) + ".");
             return;
         }
         sender.sendMessage("[ChunkCarts] " + journeys.size() + "/"
                 + engine.config().maxConcurrentJourneys() + " journeys, "
                 + plugin.heldChunkCount() + " chunks held ("
                 + plugin.heldChunkLevels() + "), "
-                + String.format(Locale.ROOT, "%.1f", engine.effectiveTps()) + " TPS:");
+                + String.format(Locale.ROOT, "%.1f", engine.effectiveTps()) + " TPS"
+                + clampedInterval(engine) + ":");
         for (JourneySnapshot journey : journeys) {
             sender.sendMessage(String.format(Locale.ROOT,
                     "  %-10s %d cart(s)  %s from %d,%d  distance %d  slack %d  budget %d",
@@ -61,6 +63,17 @@ final class ChunkCartsCommand implements CommandExecutor, TabCompleter {
                     journey.origin().cx(), journey.origin().cz(), journey.distanceRecord(),
                     journey.slackUsed(), journey.budgetRemaining()));
         }
+    }
+
+    /**
+     * Named only while the §5 clamp is actually holding the loop below the configured interval.
+     * An admin who set 10 and sees the loop running at 2 should be able to find out why here,
+     * rather than reading it as the plugin ignoring the config.
+     */
+    private static String clampedInterval(ChunkCartsEngine engine) {
+        int effective = engine.effectivePollIntervalTicks();
+        return effective == engine.config().pollIntervalTicks() ? ""
+                : ", polling every " + effective + " tick(s) — clamped on cart velocity";
     }
 
     private void reload(CommandSender sender) {

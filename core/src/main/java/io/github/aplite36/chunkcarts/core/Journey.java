@@ -39,6 +39,12 @@ final class Journey {
      */
     long lastProgressAt;
 
+    /**
+     * Epoch millis of the last write to the entity. Persisted state is the source of truth, so this
+     * bounds how stale it may get between transitions (SPEC §7) — not itself persisted.
+     */
+    long lastFlushAt;
+
     /** Chunks currently held for this journey. */
     final Set<ChunkPos> held = new LinkedHashSet<>();
 
@@ -66,6 +72,7 @@ final class Journey {
         this.state = JourneyState.TRAVELLING;
         this.lastChunk = origin;
         this.lastProgressAt = now;
+        this.lastFlushAt = now;
     }
 
     JourneySnapshot snapshot() {
