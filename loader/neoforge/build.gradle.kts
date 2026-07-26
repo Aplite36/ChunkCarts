@@ -42,8 +42,20 @@ neoForge {
     }
 }
 
+// See the comment on the same configuration in the Forge branch: reading
+// `project(":core").sourceSets` from here breaks under configure-on-demand, which the Forge branch
+// cannot build without. Resolving a configuration makes Gradle configure :core on request.
+val bundled = configurations.create("bundled") {
+    isCanBeConsumed = false
+    isCanBeResolved = true
+    isTransitive = false
+}
+
 dependencies {
     implementation(project(":core"))
+
+    bundled(project(":core"))
+    bundled("org.yaml:snakeyaml:$snakeyamlVersion")
 
     // Bundled for the same reason as on Fabric: the config schema in core takes a nested map, and
     // a config.yml copied off a Paper server must parse identically rather than nearly so.
@@ -68,11 +80,9 @@ tasks.processResources {
 // chunkcarts-<version>+<mcver>-neoforge.jar per SPEC §11. core/ and SnakeYAML go in directly:
 // neither carries a Minecraft reference, and NeoForge does not remap.
 tasks.jar {
-    from(project(":core").sourceSets["main"].output)
-    from(configurations.runtimeClasspath.get()
-            .filter { it.name.startsWith("snakeyaml") }
-            .map { zipTree(it) }) {
-        exclude("META-INF/*.SF", "META-INF/*.DSA", "META-INF/*.RSA", "META-INF/maven/**")
+    from(bundled.elements.map { artifacts -> artifacts.map { zipTree(it.asFile) } }) {
+        exclude("META-INF/*.SF", "META-INF/*.DSA", "META-INF/*.RSA", "META-INF/maven/**",
+                "META-INF/MANIFEST.MF")
     }
     archiveBaseName = "chunkcarts"
     archiveVersion = "${project.version}+$mc-neoforge"

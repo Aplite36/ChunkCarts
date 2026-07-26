@@ -63,7 +63,16 @@ tasks.withType<JavaCompile>().configureEach {
     options.release = javaTarget
 }
 
+// Shaded into the mod jar; see the comment on tasks.jar below.
+val bundled = configurations.create("bundled") {
+    isCanBeConsumed = false
+    isCanBeResolved = true
+    isTransitive = false
+}
+
 dependencies {
+    bundled(project(":core"))
+
     "minecraft"("com.mojang:minecraft:$mc")
     if (!unobfuscated) {
         // Mojang's official names, not Yarn: they are the same names 26.x ships unobfuscated,
@@ -104,8 +113,14 @@ tasks.processResources {
 
 // core/ is a plain Java library, not a mod, so Jar-in-Jar does not apply. Its classes go
 // straight into the mod jar; they carry no Minecraft references, so remapping is a no-op.
+//
+// Via a resolved configuration rather than `project(":core").sourceSets`, which fails under
+// configure-on-demand — see the fuller comment in the Forge branch, which cannot build without it.
 tasks.jar {
-    from(project(":core").sourceSets["main"].output)
+    from(bundled.elements.map { artifacts -> artifacts.map { zipTree(it.asFile) } }) {
+        exclude("META-INF/*.SF", "META-INF/*.DSA", "META-INF/*.RSA", "META-INF/maven/**",
+                "META-INF/MANIFEST.MF")
+    }
 }
 
 // chunkcarts-<version>+<mcver>-fabric.jar per SPEC §11. The shipped artifact is remapJar on an
