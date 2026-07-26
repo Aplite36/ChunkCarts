@@ -1,0 +1,32 @@
+modLoader = "javafml"
+# The major of the Forge version this node builds against. FML only accepts a major here.
+loaderVersion = "[${loader},)"
+license = "LGPL-3.0-or-later"
+issueTrackerURL = "https://github.com/Aplite36/ChunkCarts/issues"
+
+[[mods]]
+modId = "chunkcarts"
+version = "${version}"
+displayName = "ChunkCarts"
+authors = "Aplite36"
+displayURL = "https://modrinth.com/mod/chunkcarts"
+description = '''
+Minecarts load chunks while travelling. Closed and looping tracks stop loading automatically, so
+carts cannot be turned into chunk loaders.
+'''
+
+[[dependencies.chunkcarts]]
+modId = "forge"
+type = "required"
+versionRange = "[${loader},)"
+ordering = "NONE"
+side = "SERVER"
+
+[[dependencies.chunkcarts]]
+modId = "minecraft"
+type = "required"
+# Exactly this version, not a floor. SPEC §11 ships one jar per game version, and an open-ended
+# range would have the 1.21 jar claim to run on 26.2 — where half the API it calls is gone.
+versionRange = "[${mc}]"
+ordering = "NONE"
+side = "SERVER"
