@@ -34,7 +34,7 @@ final class FabricWorldQuery implements WorldQuery {
     private final MinecraftServer server;
     private final Map<String, ServerLevel> levels = new LinkedHashMap<>();
 
-    private record ChunkKey(String world, long pos) {}
+    private record ChunkKey(String world, int cx, int cz) {}
 
     /**
      * Chunks known to be generated. Positive answers only — see {@link #isGenerated}. Access-ordered
@@ -91,7 +91,7 @@ final class FabricWorldQuery implements WorldQuery {
             return true;
         }
 
-        ChunkKey key = new ChunkKey(world.value(), ChunkPos.pack(cx, cz));
+        ChunkKey key = new ChunkKey(world.value(), cx, cz);
         if (generated.containsKey(key)) {
             return true;
         }

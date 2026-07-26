@@ -2,10 +2,10 @@ package io.github.aplite36.chunkcarts.fabric;
 
 import io.github.aplite36.chunkcarts.core.WorldId;
 import io.github.aplite36.chunkcarts.core.platform.ChunkTicketBackend;
-import net.minecraft.server.level.ChunkHolder;
 import net.minecraft.server.level.FullChunkStatus;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.ChunkPos;
+import net.minecraft.world.level.chunk.LevelChunk;
 import org.slf4j.Logger;
 
 import java.util.EnumMap;
@@ -229,18 +229,19 @@ final class LevelTicketBackend implements ChunkTicketBackend {
     }
 
     /**
-     * The holder's own view of its level. {@code getUpdatingChunkIfPresent} rather than the visible
-     * map because the visible one is a copy published between update passes: a chunk we asked for a
-     * tick ago is in the updating map and not yet in the visible one, and reading the stale copy
-     * would report a false alarm for a chunk that is on its way up.
+     * The chunk's own view of its status, which is the thing that decides whether entities in it
+     * tick — not the ticket level we asked for, which is only a request.
+     *
+     * <p>{@code getChunkNow} returns null for a chunk that is not loaded at all, and that is the
+     * honest reading: a chunk still being promoted has not arrived yet, and calling it
+     * {@code INACCESSIBLE} until it does is what {@link #tick}'s settle delay is there to wait out.
      */
     private FullChunkStatus statusOf(Held chunk) {
         ServerLevel level = worlds.level(new WorldId(chunk.world()));
         if (level == null) {
             return FullChunkStatus.INACCESSIBLE;
         }
-        ChunkHolder holder = level.getChunkSource().chunkMap
-                .getUpdatingChunkIfPresent(ChunkPos.pack(chunk.cx(), chunk.cz()));
-        return holder == null ? FullChunkStatus.INACCESSIBLE : holder.getFullStatus();
+        LevelChunk loaded = level.getChunkSource().getChunkNow(chunk.cx(), chunk.cz());
+        return loaded == null ? FullChunkStatus.INACCESSIBLE : loaded.getFullStatus();
     }
 }
