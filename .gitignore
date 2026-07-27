@@ -24,6 +24,10 @@ world_the_end/
 smoke/
 dist/
 
+# Python bytecode from the CI scripts
+__pycache__/
+*.pyc
+
 # IDE
 .idea/
 *.iml
