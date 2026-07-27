@@ -162,7 +162,13 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           CHUNKCARTS_DIST: dist
           CHUNKCARTS_DRY_RUN: ${{ inputs.dry_run && 'true' || '' }}
-        run: ./gradlew publishMods --stacktrace
+        # The leading colon is load-bearing. Unqualified, Gradle must configure *every* project to
+        # resolve the task name, which drags in all forty-five Stonecutter loader nodes — and Loom
+        # and ForgeGradle both set Minecraft up at configuration time, so that is Minecraft being
+        # fetched and patched dozens of times before publishing starts. Measured: `publishMods` was
+        # still configuring after twenty minutes, `:publishMods` finishes in seconds.
+        # configureondemand only helps when the task is qualified, which is the whole point here.
+        run: ./gradlew :publishMods --stacktrace
 
       - name: Summarise
         if: always()
