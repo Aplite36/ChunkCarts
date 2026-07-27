@@ -46,6 +46,8 @@ jobs:
           # runnable from an ordinary in-development SNAPSHOT — otherwise the only way to exercise
           # this workflow is to do a real release, which is precisely the thing worth rehearsing.
           REHEARSAL: ${{ github.ref_type != 'tag' && inputs.dry_run && 'true' || 'false' }}
+          HAVE_TOKEN: ${{ secrets.MODRINTH_TOKEN != '' }}
+          PROJECT_ID: ${{ vars.MODRINTH_PROJECT_ID }}
         run: |
           declared=$(sed -n 's/^version=//p' gradle.properties)
           echo "gradle.properties declares: $declared"
@@ -68,6 +70,17 @@ jobs:
               echo "::error::If they disagree, the jars are mislabelled. Bump, commit, then re-tag."
               exit 1
             fi
+          fi
+
+          # A token with no project id uploads nothing useful: build.gradle.kts falls back to the
+          # placeholder "TBD", and the failure surfaces forty-six jars later at the upload step
+          # rather than here. The two settings only make sense together.
+          if [ "$HAVE_TOKEN" = true ] && [ -z "$PROJECT_ID" ]; then
+            echo "::error::MODRINTH_TOKEN is set but the MODRINTH_PROJECT_ID variable is not."
+            echo "::error::Set it to the project's id or slug (repository variable, not a secret —"
+            echo "::error::it is public, it is in the project URL). Without it the upload targets"
+            echo "::error::a placeholder and fails after the whole matrix has been built."
+            exit 1
           fi
 
           echo "version=$declared" >> "$GITHUB_OUTPUT"
@@ -119,6 +132,9 @@ jobs:
           # MODRINTH_TOKEN as "rehearse, upload nothing" (see build.gradle.kts). Nothing here has
           # to be conditional, and there is no path where a half-configured release half-uploads.
           MODRINTH_TOKEN: ${{ secrets.MODRINTH_TOKEN }}
+          # A repository variable rather than a secret: the project id is in the project's own
+          # public URL, and masking it in the logs would only make a failed upload harder to read.
+          MODRINTH_PROJECT_ID: ${{ vars.MODRINTH_PROJECT_ID }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           CHUNKCARTS_DIST: dist
           CHUNKCARTS_DRY_RUN: ${{ inputs.dry_run && 'true' || '' }}
