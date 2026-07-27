@@ -102,7 +102,7 @@ if (distDir != null) {
         // rehearse one platform while really uploading to another. Rehearsing everything is the
         // safe reading.
         //
-        // *Either* token missing rehearses *both* platforms. A release that reached one store and
+        // *Either* token missing rehearses *both* platforms. A release that reached one platform and
         // not the other would leave two "0.1.0"s that are not the same event, and the version that
         // silently did not ship is the one nobody notices.
         dryRun.set(

@@ -12,12 +12,12 @@ name: Release
 #   git tag v0.1.0 && git push origin v0.1.0
 #
 # Publishing is gated twice over. It will not run unless the tag matches the version declared in
-# gradle.properties, and unless *both* store tokens are present the entire publish is a dry run —
+# gradle.properties, and unless *both* platform tokens are present the entire publish is a dry run —
 # all of it, GitHub Releases included, because the plugin's dry run switch is one global flag rather
 # than one per platform.
 #
-# That all-or-nothing rule is deliberate. Half a release is worse than none: two stores would carry
-# a version of the same name that were not the same event, and the store that silently received
+# That all-or-nothing rule is deliberate. Half a release is worse than none: Modrinth and CurseForge
+# would carry a version of the same name that were not the same event, and the one that silently got
 # nothing is the one nobody checks. So a tag refuses outright rather than uploading to one of them.
 # To rehearse, dispatch this workflow manually and leave dry run on.
 on:
@@ -148,9 +148,9 @@ jobs:
 
       - name: Publish
         env:
-          # An absent secret is an empty string, and the publishMods block reads an empty
-          # MODRINTH_TOKEN as "rehearse, upload nothing" (see build.gradle.kts). Nothing here has
-          # to be conditional, and there is no path where a half-configured release half-uploads.
+          # An absent secret is an empty string, and the publishMods block reads *either* token
+          # being empty as "rehearse, upload nothing" (see build.gradle.kts). Nothing here has to
+          # be conditional, and there is no path where a half-configured release half-uploads.
           MODRINTH_TOKEN: ${{ secrets.MODRINTH_TOKEN }}
           # The CurseForge token is account-wide with no scopes, unlike the Modrinth one which is
           # narrowed to creating versions. Treat it as the more sensitive of the two.
@@ -176,7 +176,7 @@ jobs:
           if [ "$ASKED_DRY" = true ]; then
             verdict="dry run — asked for, nothing uploaded anywhere"
           elif [ "$HAVE_MODRINTH" != true ] || [ "$HAVE_CURSEFORGE" != true ]; then
-            verdict="dry run — a store token is missing, so nothing was uploaded anywhere"
+            verdict="dry run — a platform token is missing, so nothing was uploaded anywhere"
           else
             verdict="published to Modrinth, CurseForge and GitHub Releases"
           fi
