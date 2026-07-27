@@ -12,10 +12,14 @@ name: Release
 #   git tag v0.1.0 && git push origin v0.1.0
 #
 # Publishing is gated twice over. It will not run unless the tag matches the version declared in
-# gradle.properties, and with no MODRINTH_TOKEN secret the entire publish is a dry run — all of it,
-# GitHub Releases included, because the plugin's dry run switch is one global flag rather than one
-# per platform. Until the Modrinth project exists this workflow is therefore a complete rehearsal
-# of a release that uploads nothing, which is exactly what it should be.
+# gradle.properties, and unless *both* store tokens are present the entire publish is a dry run —
+# all of it, GitHub Releases included, because the plugin's dry run switch is one global flag rather
+# than one per platform.
+#
+# That all-or-nothing rule is deliberate. Half a release is worse than none: two stores would carry
+# a version of the same name that were not the same event, and the store that silently received
+# nothing is the one nobody checks. So a tag refuses outright rather than uploading to one of them.
+# To rehearse, dispatch this workflow manually and leave dry run on.
 on:
   push:
     tags: ["v*"]
@@ -46,8 +50,10 @@ jobs:
           # runnable from an ordinary in-development SNAPSHOT — otherwise the only way to exercise
           # this workflow is to do a real release, which is precisely the thing worth rehearsing.
           REHEARSAL: ${{ github.ref_type != 'tag' && inputs.dry_run && 'true' || 'false' }}
-          HAVE_TOKEN: ${{ secrets.MODRINTH_TOKEN != '' }}
-          PROJECT_ID: ${{ vars.MODRINTH_PROJECT_ID }}
+          HAVE_MODRINTH: ${{ secrets.MODRINTH_TOKEN != '' }}
+          HAVE_CURSEFORGE: ${{ secrets.CURSEFORGE_TOKEN != '' }}
+          MODRINTH_PROJECT_ID: ${{ vars.MODRINTH_PROJECT_ID }}
+          CURSEFORGE_PROJECT_ID: ${{ vars.CURSEFORGE_PROJECT_ID }}
         run: |
           declared=$(sed -n 's/^version=//p' gradle.properties)
           echo "gradle.properties declares: $declared"
@@ -72,15 +78,29 @@ jobs:
             fi
           fi
 
-          # A token with no project id uploads nothing useful: build.gradle.kts falls back to the
-          # placeholder "TBD", and the failure surfaces forty-six jars later at the upload step
-          # rather than here. The two settings only make sense together.
-          if [ "$HAVE_TOKEN" = true ] && [ -z "$PROJECT_ID" ]; then
-            echo "::error::MODRINTH_TOKEN is set but the MODRINTH_PROJECT_ID variable is not."
-            echo "::error::Set it to the project's id or slug (repository variable, not a secret —"
-            echo "::error::it is public, it is in the project URL). Without it the upload targets"
-            echo "::error::a placeholder and fails after the whole matrix has been built."
-            exit 1
+          # build.gradle.kts carries each project id as a fallback, so a missing variable is not
+          # fatal on its own. It is still worth saying out loud when a token is configured and the
+          # matching id is not, because that is how a release ends up pointed at the wrong project.
+          if [ "$HAVE_MODRINTH" = true ] && [ -z "$MODRINTH_PROJECT_ID" ]; then
+            echo "::notice::MODRINTH_TOKEN is set without a MODRINTH_PROJECT_ID variable; using the id baked into build.gradle.kts"
+          fi
+          if [ "$HAVE_CURSEFORGE" = true ] && [ -z "$CURSEFORGE_PROJECT_ID" ]; then
+            echo "::notice::CURSEFORGE_TOKEN is set without a CURSEFORGE_PROJECT_ID variable; using the id baked into build.gradle.kts"
+          fi
+
+          # A tag means a real release. Refuse one that could only ever half-publish, and refuse it
+          # here rather than after forty-six build jobs. See the note at the top of this file.
+          if [ "${{ github.ref_type }}" = "tag" ]; then
+            if [ "$HAVE_MODRINTH" != true ] || [ "$HAVE_CURSEFORGE" != true ]; then
+              echo "::error::A tagged release needs both MODRINTH_TOKEN and CURSEFORGE_TOKEN."
+              echo "::error::  MODRINTH_TOKEN present: $HAVE_MODRINTH"
+              echo "::error::  CURSEFORGE_TOKEN present: $HAVE_CURSEFORGE"
+              echo "::error::The publish plugin's dry run switch is extension-wide, so one missing"
+              echo "::error::token silently turns the whole release into a rehearsal that uploads"
+              echo "::error::nothing at all — not even the GitHub Release. Add the missing secret,"
+              echo "::error::or dispatch this workflow manually with dry run on to rehearse."
+              exit 1
+            fi
           fi
 
           echo "version=$declared" >> "$GITHUB_OUTPUT"
@@ -132,9 +152,13 @@ jobs:
           # MODRINTH_TOKEN as "rehearse, upload nothing" (see build.gradle.kts). Nothing here has
           # to be conditional, and there is no path where a half-configured release half-uploads.
           MODRINTH_TOKEN: ${{ secrets.MODRINTH_TOKEN }}
-          # A repository variable rather than a secret: the project id is in the project's own
-          # public URL, and masking it in the logs would only make a failed upload harder to read.
+          # The CurseForge token is account-wide with no scopes, unlike the Modrinth one which is
+          # narrowed to creating versions. Treat it as the more sensitive of the two.
+          CURSEFORGE_TOKEN: ${{ secrets.CURSEFORGE_TOKEN }}
+          # Repository variables rather than secrets: both project ids are in their own projects'
+          # public URLs, and masking them would only make a failed upload harder to read.
           MODRINTH_PROJECT_ID: ${{ vars.MODRINTH_PROJECT_ID }}
+          CURSEFORGE_PROJECT_ID: ${{ vars.CURSEFORGE_PROJECT_ID }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           CHUNKCARTS_DIST: dist
           CHUNKCARTS_DRY_RUN: ${{ inputs.dry_run && 'true' || '' }}
@@ -144,16 +168,17 @@ jobs:
         if: always()
         env:
           HAVE_MODRINTH: ${{ secrets.MODRINTH_TOKEN != '' }}
+          HAVE_CURSEFORGE: ${{ secrets.CURSEFORGE_TOKEN != '' }}
           ASKED_DRY: ${{ inputs.dry_run && 'true' || 'false' }}
         run: |
           # The plugin's dryRun is extension-wide, so this is one verdict for the whole release
           # rather than one per platform. See the block in build.gradle.kts.
           if [ "$ASKED_DRY" = true ]; then
             verdict="dry run — asked for, nothing uploaded anywhere"
-          elif [ "$HAVE_MODRINTH" != true ]; then
-            verdict="dry run — no MODRINTH_TOKEN secret, so nothing was uploaded anywhere"
+          elif [ "$HAVE_MODRINTH" != true ] || [ "$HAVE_CURSEFORGE" != true ]; then
+            verdict="dry run — a store token is missing, so nothing was uploaded anywhere"
           else
-            verdict="published to Modrinth and GitHub Releases"
+            verdict="published to Modrinth, CurseForge and GitHub Releases"
           fi
           {
             echo "### ChunkCarts ${{ needs.gate.outputs.version }}"
@@ -161,4 +186,7 @@ jobs:
             echo "$verdict"
             echo
             echo "46 jars: 45 loader targets and one Paper jar."
+            echo
+            echo "Modrinth and the GitHub Release carry all 46. CurseForge carries the 45 loader"
+            echo "jars only — it has no paper/bukkit loader tag, so the Paper jar cannot go there."
           } >> "$GITHUB_STEP_SUMMARY"

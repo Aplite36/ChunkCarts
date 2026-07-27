@@ -90,13 +90,25 @@ if (distDir != null) {
     val releaseNotes = rootProject.file("CHANGELOG.md").takeIf { it.isFile }?.readText()
         ?: "See https://github.com/Aplite36/ChunkCarts/releases/tag/v$projectVersion"
 
+    // 26.1 and later require Java 25; everything before it runs on 21. CurseForge wants this as
+    // file metadata, and it has to agree with the per-target toolchains rather than restate them
+    // from memory.
+    val javaFor = { mc: String ->
+        if (mc.startsWith("26.")) JavaVersion.VERSION_25 else JavaVersion.VERSION_21
+    }
+
     publishMods {
         // One global switch, because the plugin's dryRun is extension-wide — there is no way to
         // rehearse one platform while really uploading to another. Rehearsing everything is the
-        // safe reading, and until the Modrinth project exists it is also the only honest one.
+        // safe reading.
+        //
+        // *Either* token missing rehearses *both* platforms. A release that reached one store and
+        // not the other would leave two "0.1.0"s that are not the same event, and the version that
+        // silently did not ship is the one nobody notices.
         dryRun.set(
             providers.environmentVariable("CHUNKCARTS_DRY_RUN").getOrNull()?.isNotEmpty() == true ||
-                providers.environmentVariable("MODRINTH_TOKEN").getOrNull().isNullOrEmpty(),
+                providers.environmentVariable("MODRINTH_TOKEN").getOrNull().isNullOrEmpty() ||
+                providers.environmentVariable("CURSEFORGE_TOKEN").getOrNull().isNullOrEmpty(),
         )
 
         // v0.1 ships on the beta channel. Tied to the version rather than hardcoded, so the
@@ -106,23 +118,37 @@ if (distDir != null) {
 
         val modrinthShared = modrinthOptions {
             accessToken.set(providers.environmentVariable("MODRINTH_TOKEN"))
-            // No project exists yet — see the note in release.yml. With no token the run is a dry
-            // run and this is never read; it is here so the block is complete, and the day the
-            // project is created is a one-line change.
-            projectId.set(providers.environmentVariable("MODRINTH_PROJECT_ID").orElse("TBD"))
+            // The immutable id rather than the `chunkcarts` slug: Modrinth accepts either here,
+            // but a slug can be renamed by its owner and an id cannot, so a rename would otherwise
+            // point a release at nothing.
+            projectId.set(providers.environmentVariable("MODRINTH_PROJECT_ID").orElse("7Ma6i0bN"))
             // Server side only. Clients neither need it nor benefit from it, and Modrinth uses
             // this to keep it out of client-side pack tooling.
             environment.set(SERVER_ONLY)
+        }
+
+        val curseforgeShared = curseforgeOptions {
+            accessToken.set(providers.environmentVariable("CURSEFORGE_TOKEN"))
+            // Numeric, unlike Modrinth: this goes straight into the upload URL path. The slug is a
+            // separate property there and is only read for webhook announcements, which we do not use.
+            projectId.set(providers.environmentVariable("CURSEFORGE_PROJECT_ID").orElse("1627579"))
+            // CurseForge refuses a file that declares neither environment, and the plugin throws
+            // before it ever calls the API. Server only, for the same reason as Modrinth above.
+            client.set(false)
+            server.set(true)
+            // CHANGELOG.md is Markdown. The default happens to be markdown too, but a silent
+            // default deciding how release notes render is worth pinning.
+            changelogType.set("markdown")
         }
 
         for (artifact in loaderArtifacts) {
             // One version entry per artifact, because one jar supports exactly one game version.
             // A single entry tagged with all fifteen would let someone download the 1.21 jar for a
             // 26.2 server, where half the API it calls no longer exists.
-            val id = "modrinth${artifact.loader.replaceFirstChar { c -> c.uppercase() }}" +
+            val suffix = artifact.loader.replaceFirstChar { c -> c.uppercase() } +
                 artifact.mc.replace(".", "_")
 
-            modrinth(id) {
+            modrinth("modrinth$suffix") {
                 from(modrinthShared)
                 file.set(artifact.file)
                 version.set("$projectVersion+${artifact.mc}-${artifact.loader}")
@@ -132,6 +158,25 @@ if (distDir != null) {
 
                 // fabric.mod.json declares this as a hard dependency, so Loader rejects the mod
                 // without it. Declaring it here is what makes Modrinth's installer pull it in.
+                if (artifact.loader == "fabric") {
+                    requires("fabric-api")
+                }
+            }
+
+            curseforge("curseforge$suffix") {
+                from(curseforgeShared)
+                file.set(artifact.file)
+                version.set("$projectVersion+${artifact.mc}-${artifact.loader}")
+                displayName.set("ChunkCarts $projectVersion — ${artifact.loader} ${artifact.mc}")
+                // Resolved against CurseForge's live version list at publish time, case
+                // insensitively, so `neoforge` matches their `NeoForge`. A name they do not list
+                // throws rather than being skipped — all fifteen game versions were checked against
+                // the live list before this block was written.
+                modLoaders.add(artifact.loader)
+                minecraftVersions.add(artifact.mc)
+                javaVersions.add(javaFor(artifact.mc))
+
+                // Dependencies are slugs on CurseForge, not numeric project ids.
                 if (artifact.loader == "fabric") {
                     requires("fabric-api")
                 }
@@ -146,6 +191,14 @@ if (distDir != null) {
             modLoaders.addAll(bukkitLoaders)
             minecraftVersions.addAll(allGameVersions)
         }
+
+        // There is deliberately no CurseForge entry for the Paper jar. Their modloader list is
+        // Fabric, Flint Loader, Forge, NeoForge, Quilt, Rift and Risugami's ModLoader — read off
+        // the live `game/versions` endpoint, not assumed — with no paper, bukkit or spigot tag at
+        // all, because CurseForge files Bukkit plugins under a separate project class. Adding one
+        // would throw `Failed to find version: paper` and take the whole release down with it.
+        // CurseForge therefore carries the forty-five loader jars; the Paper jar ships on Modrinth
+        // and in the GitHub release.
 
         // One release carrying all forty-six jars, rather than forty-six releases. The GitHub
         // release is the provenance record — "this tag produced these files" — and splitting it
