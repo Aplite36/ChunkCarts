@@ -20,6 +20,10 @@ world_the_end/
 *.jar
 !gradle/wrapper/gradle-wrapper.jar
 
+# CI working directories — a downloaded server and a pile of collected jars
+smoke/
+dist/
+
 # IDE
 .idea/
 *.iml

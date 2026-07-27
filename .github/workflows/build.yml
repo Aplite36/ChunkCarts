@@ -1,0 +1,265 @@
+name: Build
+
+# SPEC §13: nothing is published from a local machine, so CI has to be the thing that builds every
+# jar. Two scopes, because building all forty-five loader targets takes long enough that doing it on
+# every push to a branch would make the feedback useless:
+#
+#   pull request      -> core, bukkit, and one loader target per branch point in the source (~20)
+#   push to main      -> core, bukkit, and all forty-five loader targets
+#   manual dispatch   -> whichever you ask for
+#
+# The subset is defined, with a reason per entry, in .github/scripts/build_matrix.py. Read the
+# warning at the top of that file before trusting it: a green subset is weaker evidence than it
+# looks, which is why main gets the whole matrix.
+#
+# Also callable: release.yml runs this whole workflow at `full` scope and then publishes the
+# artifacts it produced, so a release is built by exactly the code path that gates main rather than
+# by a second, subtly different copy of it.
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      scope:
+        description: Loader targets to build
+        type: choice
+        default: full
+        options: [full, subset]
+  workflow_call:
+    inputs:
+      scope:
+        description: Loader targets to build
+        type: string
+        default: full
+    outputs:
+      version:
+        description: The project version these artifacts were built at
+        value: ${{ jobs.plan.outputs.version }}
+
+# A newer push supersedes an older one on the same ref. Never cancel on main or on a tag: those
+# runs are the record of whether main builds, and of what a published jar was built from.
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' && !startsWith(github.ref, 'refs/tags/') }}
+
+permissions:
+  contents: read
+
+env:
+  GRADLE_OPTS: -Dorg.gradle.welcome=never
+
+jobs:
+  plan:
+    name: Plan matrix
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.matrix.outputs.matrix }}
+      scope: ${{ steps.matrix.outputs.scope }}
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@v5
+
+      - id: matrix
+        name: Choose scope
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            scope=subset
+          else
+            scope="${{ inputs.scope || 'full' }}"
+          fi
+          echo "scope=$scope" >> "$GITHUB_OUTPUT"
+          echo "matrix=$(python3 .github/scripts/build_matrix.py --scope "$scope")" >> "$GITHUB_OUTPUT"
+          {
+            echo "### Loader targets: \`$scope\`"
+            echo
+            echo '```'
+            python3 .github/scripts/build_matrix.py --scope "$scope" --pretty
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - id: version
+        name: Read project version
+        # Read out of gradle.properties rather than by running Gradle: every job needs it to check
+        # the metadata, and starting a JVM in the planning job to learn one string is silly.
+        run: |
+          version=$(sed -n 's/^version=//p' gradle.properties)
+          test -n "$version" || { echo "no version= in gradle.properties"; exit 1; }
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+  core:
+    name: core tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - uses: gradle/actions/setup-gradle@v5
+
+      # The §9 suite is the regression gate for the safety claim. It runs on its own, first, and
+      # fast — if this is red nothing else matters.
+      - run: ./gradlew :core:test
+
+      - if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: core-test-report
+          path: core/build/reports/tests/test/
+
+  bukkit:
+    name: bukkit jar
+    runs-on: ubuntu-latest
+    needs: plan
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - uses: gradle/actions/setup-gradle@v5
+
+      - run: ./gradlew :bukkit:build
+
+      - name: Verify plugin metadata
+        run: |
+          python3 .github/scripts/verify_jar_metadata.py \
+            --platform bukkit --version '${{ needs.plan.outputs.version }}' \
+            bukkit/build/libs/chunkcarts-*+bukkit.jar
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: chunkcarts-bukkit
+          path: bukkit/build/libs/chunkcarts-*+bukkit.jar
+          if-no-files-found: error
+
+  loader:
+    name: ${{ matrix.loader }} ${{ matrix.mc }}
+    runs-on: ubuntu-latest
+    needs: plan
+    strategy:
+      # SPEC §13. One target failing tells you nothing about the other forty-four, and the whole
+      # point of the matrix is to learn which ones break.
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.plan.outputs.matrix) }}
+    steps:
+      - uses: actions/checkout@v5
+
+      # Both toolchains, always. Gradle picks per target — 21 for 1.21.x, 25 for 26.x (SPEC §1) —
+      # by finding the JAVA_HOME_*_X64 variables setup-java exports. Installing only the one this
+      # target needs would work until a shared module wanted the other.
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: |
+            21
+            25
+
+      - uses: gradle/actions/setup-gradle@v5
+        with:
+          # Let the Gradle action manage its own dependency cache, but never write a cache entry
+          # from a matrix job: forty-five jobs racing to save near-identical entries into a 10 GB
+          # repository-wide budget evicts each other and costs more than it saves. The dependency
+          # cache below is one entry per loader, saved deliberately.
+          cache-read-only: true
+
+      # Cached deliberately narrowly. The decompiled/patched Minecraft under caches/fabric-loom and
+      # caches/minecraftforge is ~250-500 MB *per target*, so all forty-five would be ~12 GB against
+      # a 10 GB repository cap — guaranteed eviction thrash, and a cache that never hits is slower
+      # than no cache. modules-2 is the ordinary dependency jars, ~1 GB shared across a loader's
+      # targets, and it does hit.
+      - name: Cache Gradle dependency jars
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches/modules-2
+            ~/.gradle/wrapper
+          key: gradle-deps-${{ matrix.loader }}-${{ hashFiles('**/*.gradle.kts', 'gradle.properties', 'gradle/wrapper/gradle-wrapper.properties') }}
+          restore-keys: gradle-deps-${{ matrix.loader }}-
+
+      # One target per invocation, as the project does locally — though here it is for a different
+      # reason. The local rule is memory (see the buildAll note in loader/stonecutter.gradle.kts);
+      # here each job is its own machine, and one target per job is what makes a failure name the
+      # version that failed.
+      - name: Build
+        run: ./gradlew :loader:${{ matrix.loader }}:${{ matrix.mc }}:build
+
+      # The gate that compilation does not give you. A jar can build on all fifteen targets and be
+      # rejected by the mod loader on all fifteen — that has already happened once here, to the
+      # Forge `mods.toml`. See the docstring in the script.
+      - name: Verify mod metadata
+        run: |
+          python3 .github/scripts/verify_jar_metadata.py \
+            --platform '${{ matrix.loader }}' --mc '${{ matrix.mc }}' \
+            --version '${{ needs.plan.outputs.version }}' \
+            loader/${{ matrix.loader }}/versions/${{ matrix.mc }}/build/libs/chunkcarts-*.jar
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: chunkcarts-${{ matrix.loader }}-${{ matrix.mc }}
+          path: loader/${{ matrix.loader }}/versions/${{ matrix.mc }}/build/libs/chunkcarts-*.jar
+          if-no-files-found: error
+
+  smoke:
+    name: smoke ${{ matrix.loader }}
+    runs-on: ubuntu-latest
+    needs: [plan, loader]
+    # Runs even when part of the matrix is red. `needs` on a matrix normally means "all forty-five
+    # succeeded", which would let one broken exotic target suppress the only evidence in the whole
+    # workflow that the mod loads — exactly when you most want to know. This job depends on three
+    # 1.21.11 jars, and if those three are missing download-artifact says so plainly.
+    if: ${{ !cancelled() }}
+    strategy:
+      fail-fast: false
+      matrix:
+        loader: [fabric, neoforge, forge]
+    env:
+      # 1.21.11 sits above every API seam on all three loaders at once, which is why the local
+      # test servers are all on it too. One version, three loaders: this job answers "does the mod
+      # load and start", not "does it load on every version".
+      SMOKE_MC: "1.21.11"
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: chunkcarts-${{ matrix.loader }}-1.21.11
+          path: jar/
+
+      # Installs a real server, boots it with the jar the matrix just built, and fails unless
+      # ChunkCarts reports itself enabled. This is the only step in the workflow that proves the
+      # mod does anything at all.
+      - name: Boot a server and check the mod enables
+        run: .github/scripts/smoke_test.sh '${{ matrix.loader }}' "$SMOKE_MC" jar/
+
+      - if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: smoke-log-${{ matrix.loader }}
+          path: smoke/logs/
+
+  # A single required check to point branch protection at, so the rule does not have to name
+  # forty-five jobs that change with the matrix.
+  build-ok:
+    name: Build OK
+    runs-on: ubuntu-latest
+    needs: [core, bukkit, loader, smoke]
+    if: always()
+    steps:
+      - name: Fail unless every job succeeded
+        run: |
+          results='${{ join(needs.*.result, ' ') }}'
+          echo "job results: $results"
+          for result in $results; do
+            [ "$result" = "success" ] || { echo "a required job did not succeed"; exit 1; }
+          done

@@ -8,8 +8,8 @@
 #  Don't want to read all this? The defaults are the safe, recommended
 #  settings. You can leave this file alone.
 #
-#  Docs:  https://github.com/<user>/ChunkCarts
-#  Bugs:  https://github.com/<user>/ChunkCarts/issues
+#  Docs:  https://github.com/Aplite36/ChunkCarts
+#  Bugs:  https://github.com/Aplite36/ChunkCarts/issues
 # ═══════════════════════════════════════════════════════════════════════════
 
 # Internal. Used to migrate your settings if a future release renames a key.

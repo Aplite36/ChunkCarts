@@ -1,0 +1,148 @@
+name: Release
+
+# SPEC §13: every published jar is built by CI from a tagged public commit, so "this jar came from
+# this source" is checkable rather than taken on trust. That only holds if releasing is *only* ever
+# this workflow — nothing is uploaded from a laptop.
+#
+# The whole build is delegated to build.yml at full scope rather than reimplemented here. A release
+# therefore goes through the identical path that gates main: same matrix, same metadata verifier,
+# same smoke test. A second copy of the build would eventually drift from the first, and the copy
+# that drifts is the one that ships.
+#
+#   git tag v0.1.0 && git push origin v0.1.0
+#
+# Publishing is gated twice over. It will not run unless the tag matches the version declared in
+# gradle.properties, and with no MODRINTH_TOKEN secret the entire publish is a dry run — all of it,
+# GitHub Releases included, because the plugin's dry run switch is one global flag rather than one
+# per platform. Until the Modrinth project exists this workflow is therefore a complete rehearsal
+# of a release that uploads nothing, which is exactly what it should be.
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: Build and check everything, upload nothing
+        type: boolean
+        default: true
+
+permissions:
+  contents: write   # creating the GitHub Release
+
+jobs:
+  # Cheap, and first: refuse before spending forty-five build jobs on something that cannot be
+  # published. Both of these have a way of being noticed only at the upload step otherwise.
+  gate:
+    name: Check the tag
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.check.outputs.version }}
+    steps:
+      - uses: actions/checkout@v5
+
+      - id: check
+        env:
+          # A manual dispatch left on its default is a rehearsal, and a rehearsal has to be
+          # runnable from an ordinary in-development SNAPSHOT — otherwise the only way to exercise
+          # this workflow is to do a real release, which is precisely the thing worth rehearsing.
+          REHEARSAL: ${{ github.ref_type != 'tag' && inputs.dry_run && 'true' || 'false' }}
+        run: |
+          declared=$(sed -n 's/^version=//p' gradle.properties)
+          echo "gradle.properties declares: $declared"
+
+          case "$declared" in
+            *SNAPSHOT*)
+              if [ "$REHEARSAL" = true ]; then
+                echo "::notice::rehearsing a release of $declared — a real release would refuse this"
+              else
+                echo "::error::refusing to release $declared — bump gradle.properties to a real version first"
+                exit 1
+              fi ;;
+          esac
+
+          if [ "${{ github.ref_type }}" = "tag" ]; then
+            tagged="${GITHUB_REF_NAME#v}"
+            if [ "$tagged" != "$declared" ]; then
+              echo "::error::tag ${GITHUB_REF_NAME} does not match gradle.properties ($declared)."
+              echo "::error::The tag names the release; gradle.properties names what goes inside the jars."
+              echo "::error::If they disagree, the jars are mislabelled. Bump, commit, then re-tag."
+              exit 1
+            fi
+          fi
+
+          echo "version=$declared" >> "$GITHUB_OUTPUT"
+
+  build:
+    name: Build
+    needs: gate
+    uses: ./.github/workflows/build.yml
+    with:
+      scope: full
+
+  publish:
+    name: Publish
+    runs-on: ubuntu-latest
+    needs: [gate, build]
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - uses: gradle/actions/setup-gradle@v5
+
+      # Everything the matrix built, flattened into one directory. Publishing from downloaded
+      # artifacts rather than from a local build is what makes "the published jar is the jar CI
+      # tested" literally true: these are the same files the smoke test booted.
+      - name: Collect the built jars
+        uses: actions/download-artifact@v4
+        with:
+          pattern: chunkcarts-*
+          merge-multiple: true
+          path: dist/
+
+      # Forty-five loader jars and one Bukkit jar. Asserted, because download-artifact is happy to
+      # give you a partial set, and a release that quietly ships forty of them is worse than one
+      # that fails: the missing five look discontinued rather than broken.
+      - name: Check the full set arrived
+        run: |
+          ls -1 dist/
+          count=$(find dist -maxdepth 1 -name '*.jar' | wc -l | tr -d ' ')
+          echo "$count jars"
+          test "$count" -eq 46 || { echo "::error::expected 46 jars, found $count"; exit 1; }
+
+      - name: Publish
+        env:
+          # An absent secret is an empty string, and the publishMods block reads an empty
+          # MODRINTH_TOKEN as "rehearse, upload nothing" (see build.gradle.kts). Nothing here has
+          # to be conditional, and there is no path where a half-configured release half-uploads.
+          MODRINTH_TOKEN: ${{ secrets.MODRINTH_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CHUNKCARTS_DIST: dist
+          CHUNKCARTS_DRY_RUN: ${{ inputs.dry_run && 'true' || '' }}
+        run: ./gradlew publishMods --stacktrace
+
+      - name: Summarise
+        if: always()
+        env:
+          HAVE_MODRINTH: ${{ secrets.MODRINTH_TOKEN != '' }}
+          ASKED_DRY: ${{ inputs.dry_run && 'true' || 'false' }}
+        run: |
+          # The plugin's dryRun is extension-wide, so this is one verdict for the whole release
+          # rather than one per platform. See the block in build.gradle.kts.
+          if [ "$ASKED_DRY" = true ]; then
+            verdict="dry run — asked for, nothing uploaded anywhere"
+          elif [ "$HAVE_MODRINTH" != true ]; then
+            verdict="dry run — no MODRINTH_TOKEN secret, so nothing was uploaded anywhere"
+          else
+            verdict="published to Modrinth and GitHub Releases"
+          fi
+          {
+            echo "### ChunkCarts ${{ needs.gate.outputs.version }}"
+            echo
+            echo "$verdict"
+            echo
+            echo "46 jars: 45 loader targets and one Paper jar."
+          } >> "$GITHUB_STEP_SUMMARY"
