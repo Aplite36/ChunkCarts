@@ -15,6 +15,7 @@ plugins {
 }
 
 include("core")
+include("metrics")
 include("bukkit")
 
 // The candidate target list. 1.21.2 is absent deliberately. Nothing is pruned from here

@@ -13,8 +13,10 @@ import io.github.aplite36.chunkcarts.loader.JourneyStore;
 import io.github.aplite36.chunkcarts.loader.JourneyTicket;
 import io.github.aplite36.chunkcarts.loader.LevelTicketBackend;
 import io.github.aplite36.chunkcarts.loader.LevelWorldQuery;
+import io.github.aplite36.chunkcarts.loader.LoaderMetricsPlatform;
 import io.github.aplite36.chunkcarts.loader.SystemClock;
 import io.github.aplite36.chunkcarts.loader.TickScheduler;
+import io.github.aplite36.chunkcarts.metrics.ChunkCartsMetrics;
 import net.fabricmc.api.ModInitializer;
 import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerEntityEvents;
@@ -36,6 +38,7 @@ import net.minecraft.world.item.MinecartItem;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.IOException;
 import java.util.List;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -77,6 +80,7 @@ public final class ChunkCartsFabric implements ModInitializer, ChunkCartsMod {
     private TickScheduler scheduler;
     private LevelWorldQuery worlds;
     private JourneyStore journeys;
+    private ChunkCartsMetrics metrics;
     private boolean debug;
 
     /** Who used a minecart item where, so the cart that appears next can be attributed to them. */
@@ -92,7 +96,14 @@ public final class ChunkCartsFabric implements ModInitializer, ChunkCartsMod {
         journeys = new FabricJourneyStore();
 
         ServerLifecycleEvents.SERVER_STARTED.register(this::start);
-        ServerLifecycleEvents.SERVER_STOPPING.register(startedServer -> stop());
+        // Metrics are torn down here and not in stop(), which also runs on /chunkcarts reload.
+        ServerLifecycleEvents.SERVER_STOPPING.register(startedServer -> {
+            if (metrics != null) {
+                metrics.shutdown();
+                metrics = null;
+            }
+            stop();
+        });
         ServerTickEvents.END_SERVER_TICK.register(this::onServerTick);
 
         ServerEntityEvents.ENTITY_LOAD.register(this::onEntityLoad);
@@ -195,8 +206,32 @@ public final class ChunkCartsFabric implements ModInitializer, ChunkCartsMod {
         scheduler = new TickScheduler();
         scheduler.repeating(TRAVEL_LOOP, engine.effectivePollIntervalTicks(), this::runTravelLoop);
 
+        startMetrics(startedServer);
+
         LOGGER.info("ChunkCarts {} enabled — {}, tracking {} cart(s).",
                 modVersion(), config.enforcement(), tracker.trackedCount());
+    }
+
+    /**
+     * Started at most once per server lifetime, though {@code start} itself runs again on every
+     * {@code /chunkcarts reload}: each reporter owns a submit schedule, so restarting it per reload
+     * would stack them up. The {@code metrics} key is still honoured live — the reporter polls it.
+     *
+     * <p>Nothing about metrics may stop the mod working, so every failure here is a warning.
+     */
+    private void startMetrics(MinecraftServer startedServer) {
+        if (metrics != null) {
+            return;
+        }
+        try {
+            metrics = ChunkCartsMetrics.start(
+                    ChunkCartsMetrics.settingsFromFile(
+                            FabricLoader.getInstance().getConfigDir().resolve("bStats").toFile()),
+                    new LoaderMetricsPlatform(startedServer, () -> engine, "Fabric", modVersion(),
+                            LOGGER));
+        } catch (IOException | RuntimeException e) {
+            LOGGER.warn("Could not start metrics reporting; carrying on without it: {}", e.toString());
+        }
     }
 
     /**

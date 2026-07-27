@@ -13,8 +13,10 @@ import io.github.aplite36.chunkcarts.loader.JourneyStore;
 import io.github.aplite36.chunkcarts.loader.JourneyTicket;
 import io.github.aplite36.chunkcarts.loader.LevelTicketBackend;
 import io.github.aplite36.chunkcarts.loader.LevelWorldQuery;
+import io.github.aplite36.chunkcarts.loader.LoaderMetricsPlatform;
 import io.github.aplite36.chunkcarts.loader.SystemClock;
 import io.github.aplite36.chunkcarts.loader.TickScheduler;
+import io.github.aplite36.chunkcarts.metrics.ChunkCartsMetrics;
 //? if >=1.21.5 {
 import net.minecraft.core.registries.Registries;
 //?}
@@ -48,6 +50,7 @@ import net.minecraftforge.registries.RegisterEvent;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.IOException;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -113,6 +116,7 @@ public final class ChunkCartsForge implements ChunkCartsMod {
     private TickScheduler scheduler;
     private LevelWorldQuery worlds;
     private final JourneyStore journeys = new ForgeJourneyStore();
+    private ChunkCartsMetrics metrics;
     private boolean debug;
 
     /** Who used a minecart item where, so the cart that appears next can be attributed to them. */
@@ -190,7 +194,7 @@ public final class ChunkCartsForge implements ChunkCartsMod {
     private void wireGameEvents(ChunkCartsCommand command) {
         //? if >=1.21.6 {
         ServerStartedEvent.BUS.addListener(event -> start(event.getServer()));
-        ServerStoppingEvent.BUS.addListener(event -> stop());
+        ServerStoppingEvent.BUS.addListener(event -> serverStopping());
 
         EntityJoinLevelEvent.BUS.addListener(this::onEntityLoad);
         EntityLeaveLevelEvent.BUS.addListener(this::onEntityUnload);
@@ -203,7 +207,7 @@ public final class ChunkCartsForge implements ChunkCartsMod {
         gameBus.addListener(EventPriority.NORMAL, false, ServerStartedEvent.class,
                 event -> start(event.getServer()));
         gameBus.addListener(EventPriority.NORMAL, false, ServerStoppingEvent.class,
-                event -> stop());
+                event -> serverStopping());
 
         gameBus.addListener(EventPriority.NORMAL, false, EntityJoinLevelEvent.class,
                 this::onEntityLoad);
@@ -365,8 +369,41 @@ public final class ChunkCartsForge implements ChunkCartsMod {
         scheduler = new TickScheduler();
         scheduler.repeating(TRAVEL_LOOP, engine.effectivePollIntervalTicks(), this::runTravelLoop);
 
+        startMetrics(startedServer);
+
         LOGGER.info("ChunkCarts {} enabled — {}, tracking {} cart(s).",
                 modVersion(), config.enforcement(), tracker.trackedCount());
+    }
+
+    /**
+     * Started at most once per server lifetime, though {@code start} itself runs again on every
+     * {@code /chunkcarts reload}: each reporter owns a submit schedule, so restarting it per reload
+     * would stack them up. The {@code metrics} key is still honoured live — the reporter polls it.
+     *
+     * <p>Nothing about metrics may stop the mod working, so every failure here is a warning.
+     */
+    private void startMetrics(MinecraftServer startedServer) {
+        if (metrics != null) {
+            return;
+        }
+        try {
+            metrics = ChunkCartsMetrics.start(
+                    ChunkCartsMetrics.settingsFromFile(
+                            FMLPaths.CONFIGDIR.get().resolve("bStats").toFile()),
+                    new LoaderMetricsPlatform(startedServer, () -> engine, "Forge", modVersion(),
+                            LOGGER));
+        } catch (IOException | RuntimeException e) {
+            LOGGER.warn("Could not start metrics reporting; carrying on without it: {}", e.toString());
+        }
+    }
+
+    /** Server shutdown, as distinct from {@code /chunkcarts reload}, which also calls {@link #stop}. */
+    private void serverStopping() {
+        if (metrics != null) {
+            metrics.shutdown();
+            metrics = null;
+        }
+        stop();
     }
 
     /**

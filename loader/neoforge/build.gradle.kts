@@ -53,8 +53,10 @@ val bundled = configurations.create("bundled") {
 
 dependencies {
     implementation(project(":core"))
+    implementation(project(":metrics"))
 
     bundled(project(":core"))
+    bundled(project(":metrics"))
     bundled("org.yaml:snakeyaml:$snakeyamlVersion")
 
     // Bundled for the same reason as on Fabric: the config schema in core takes a nested map, and

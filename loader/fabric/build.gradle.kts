@@ -72,6 +72,7 @@ val bundled = configurations.create("bundled") {
 
 dependencies {
     bundled(project(":core"))
+    bundled(project(":metrics"))
 
     "minecraft"("com.mojang:minecraft:$mc")
     if (!unobfuscated) {
@@ -89,6 +90,7 @@ dependencies {
     modDependency("net.fabricmc.fabric-api:fabric-api:${property("fabric_api_version")}")
 
     implementation(project(":core"))
+    implementation(project(":metrics"))
 
     // The config schema lives in core and takes a plain nested map, so something has to turn
     // config/chunkcarts.yml into one. Bukkit gets SnakeYAML from the server; here it is bundled, so

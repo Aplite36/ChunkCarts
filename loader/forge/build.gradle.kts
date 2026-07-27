@@ -91,6 +91,7 @@ dependencies {
     // EventBus build (measured: 6.2.8 through 7.0.5 across the fifteen) for no benefit.
 
     implementation(project(":core"))
+    implementation(project(":metrics"))
 
     // Bundled for the same reason as on the other two loaders: the config schema in core takes a
     // nested map, and a config.yml copied off a Paper server must parse identically rather than
@@ -99,6 +100,7 @@ dependencies {
     implementation("org.yaml:snakeyaml:$snakeyamlVersion")
 
     bundled(project(":core"))
+    bundled(project(":metrics"))
     bundled("org.yaml:snakeyaml:$snakeyamlVersion")
 }
 

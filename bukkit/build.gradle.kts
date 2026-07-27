@@ -11,6 +11,7 @@ java {
 
 dependencies {
     implementation(project(":core"))
+    implementation(project(":metrics"))
 
     // Compiled against the 1.21 API floor. Bukkit is forward-compatible at runtime but
     // not backward, so the floor is what makes one jar cover 1.21 -> 26.2.

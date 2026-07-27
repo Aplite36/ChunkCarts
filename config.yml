@@ -325,8 +325,13 @@ stranded:
 # ───────────────────────────────────────────────────────────────────────────
 
 # Send anonymous usage statistics to bStats: server software, game version,
-# player count, and which enforcement mode you're using.
+# player count, and the enforcement and departure-requirement settings you use.
+# Nothing else — no player data, no world data, no IP addresses, no coordinates.
 #
-# This is how it gets decided which game versions stay supported. No player
-# data, no world data, no IP addresses. Set to false to opt out.
+# This is how it gets decided which game versions stay supported, and whether
+# anyone actually runs permissive mode. Set to false to opt out; the change takes
+# effect on /chunkcarts reload, no restart needed. Server owners who would rather
+# switch bStats off for every plugin and mod at once can do that in bStats' own
+# config file instead: plugins/bStats/config.yml on Paper, config/bStats/config.txt
+# on Fabric, NeoForge and Forge.
 metrics: true

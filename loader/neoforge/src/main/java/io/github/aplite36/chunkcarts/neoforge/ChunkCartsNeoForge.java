@@ -13,8 +13,10 @@ import io.github.aplite36.chunkcarts.loader.JourneyStore;
 import io.github.aplite36.chunkcarts.loader.JourneyTicket;
 import io.github.aplite36.chunkcarts.loader.LevelTicketBackend;
 import io.github.aplite36.chunkcarts.loader.LevelWorldQuery;
+import io.github.aplite36.chunkcarts.loader.LoaderMetricsPlatform;
 import io.github.aplite36.chunkcarts.loader.SystemClock;
 import io.github.aplite36.chunkcarts.loader.TickScheduler;
+import io.github.aplite36.chunkcarts.metrics.ChunkCartsMetrics;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.Container;
@@ -43,6 +45,7 @@ import net.neoforged.neoforge.registries.RegisterEvent;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.IOException;
 import java.util.List;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -88,6 +91,7 @@ public final class ChunkCartsNeoForge implements ChunkCartsMod {
     private TickScheduler scheduler;
     private LevelWorldQuery worlds;
     private final JourneyStore journeys;
+    private ChunkCartsMetrics metrics;
     private boolean debug;
 
     /** Who used a minecart item where, so the cart that appears next can be attributed to them. */
@@ -120,7 +124,7 @@ public final class ChunkCartsNeoForge implements ChunkCartsMod {
         /*JourneyTicket.register();*/
 
         NeoForge.EVENT_BUS.addListener(ServerStartedEvent.class, event -> start(event.getServer()));
-        NeoForge.EVENT_BUS.addListener(ServerStoppingEvent.class, event -> stop());
+        NeoForge.EVENT_BUS.addListener(ServerStoppingEvent.class, event -> serverStopping());
         NeoForge.EVENT_BUS.addListener(ServerTickEvent.Post.class,
                 event -> onServerTick(event.getServer()));
 
@@ -225,8 +229,41 @@ public final class ChunkCartsNeoForge implements ChunkCartsMod {
         scheduler = new TickScheduler();
         scheduler.repeating(TRAVEL_LOOP, engine.effectivePollIntervalTicks(), this::runTravelLoop);
 
+        startMetrics(startedServer);
+
         LOGGER.info("ChunkCarts {} enabled — {}, tracking {} cart(s).",
                 modVersion(), config.enforcement(), tracker.trackedCount());
+    }
+
+    /**
+     * Started at most once per server lifetime, though {@code start} itself runs again on every
+     * {@code /chunkcarts reload}: each reporter owns a submit schedule, so restarting it per reload
+     * would stack them up. The {@code metrics} key is still honoured live — the reporter polls it.
+     *
+     * <p>Nothing about metrics may stop the mod working, so every failure here is a warning.
+     */
+    private void startMetrics(MinecraftServer startedServer) {
+        if (metrics != null) {
+            return;
+        }
+        try {
+            metrics = ChunkCartsMetrics.start(
+                    ChunkCartsMetrics.settingsFromFile(
+                            FMLPaths.CONFIGDIR.get().resolve("bStats").toFile()),
+                    new LoaderMetricsPlatform(startedServer, () -> engine, "NeoForge", modVersion(),
+                            LOGGER));
+        } catch (IOException | RuntimeException e) {
+            LOGGER.warn("Could not start metrics reporting; carrying on without it: {}", e.toString());
+        }
+    }
+
+    /** Server shutdown, as distinct from {@code /chunkcarts reload}, which also calls {@link #stop}. */
+    private void serverStopping() {
+        if (metrics != null) {
+            metrics.shutdown();
+            metrics = null;
+        }
+        stop();
     }
 
     /**

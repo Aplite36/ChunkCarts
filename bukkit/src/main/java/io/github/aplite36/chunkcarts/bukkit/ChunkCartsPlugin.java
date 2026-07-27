@@ -3,6 +3,7 @@ package io.github.aplite36.chunkcarts.bukkit;
 import io.github.aplite36.chunkcarts.core.ChunkCartsEngine;
 import io.github.aplite36.chunkcarts.core.Config;
 import io.github.aplite36.chunkcarts.core.ConfigReader;
+import io.github.aplite36.chunkcarts.metrics.ChunkCartsMetrics;
 import org.bukkit.NamespacedKey;
 import org.bukkit.World;
 import org.bukkit.configuration.ConfigurationSection;
@@ -39,6 +40,7 @@ public final class ChunkCartsPlugin extends JavaPlugin {
     private PluginTicketBackend tickets;
     private BukkitTaskScheduler scheduler;
     private ChunkCartsListener listener;
+    private ChunkCartsMetrics metrics;
     private boolean debug;
 
     @Override
@@ -55,6 +57,8 @@ public final class ChunkCartsPlugin extends JavaPlugin {
             registered.setTabCompleter(command);
         }
 
+        startMetrics();
+
         getLogger().info("ChunkCarts " + getPluginMeta().getVersion() + " enabled — "
                 + engine.config().enforcement() + ", tracking " + tracker.trackedCount()
                 + " cart(s).");
@@ -62,7 +66,27 @@ public final class ChunkCartsPlugin extends JavaPlugin {
 
     @Override
     public void onDisable() {
+        if (metrics != null) {
+            metrics.shutdown();
+        }
         stop();
+    }
+
+    /**
+     * Started once here rather than in {@link #start()}, which runs again on every reload: each
+     * reporter owns a submit schedule, so restarting it per reload would stack them up. The
+     * {@code metrics} key is still honoured live — the reporter polls it rather than capturing it.
+     *
+     * <p>Nothing about metrics may prevent the plugin working, so this swallows everything.
+     */
+    private void startMetrics() {
+        try {
+            metrics = ChunkCartsMetrics.start(
+                    BukkitMetricsPlatform.readSettings(getDataFolder().getParentFile()),
+                    new BukkitMetricsPlatform(this));
+        } catch (RuntimeException e) {
+            getLogger().warning("Could not start metrics reporting; carrying on without it: " + e);
+        }
     }
 
     ChunkCartsEngine engine() {
