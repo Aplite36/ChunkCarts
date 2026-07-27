@@ -242,7 +242,9 @@ jobs:
       - name: Boot a server and check the mod enables
         run: .github/scripts/smoke_test.sh '${{ matrix.loader }}' "$SMOKE_MC" jar/
 
-      - if: failure()
+      # Kept on success too. The script surfaces error lines from a passing boot, and the whole
+      # log is the only way to tell a benign headless-runner complaint from a real one.
+      - if: ${{ !cancelled() }}
         uses: actions/upload-artifact@v4
         with:
           name: smoke-log-${{ matrix.loader }}

@@ -181,8 +181,12 @@ run_server() {
     # Not a failure: a headless runner logs a couple of benign errors of its own (no terminal, no
     # authentication). Surfaced rather than asserted on, so a real stack trace is visible in the
     # summary without turning every runner quirk into a red build.
-    if grep -cE 'Exception|ERROR\]' "$log" > /dev/null; then
-        say "note: $(grep -cE 'Exception|ERROR\]' "$log") error line(s) in the log — review $log"
+    # Printed inline rather than only pointed at. A note saying "review the log" is worth nothing
+    # on a runner whose disk is thrown away seconds later, and a passing job is exactly when
+    # nobody goes looking for the artifact.
+    if grep -qE 'Exception|ERROR\]' "$log"; then
+        say "note: $(grep -cE 'Exception|ERROR\]' "$log") error line(s) in the log, first 20:"
+        grep -nE 'Exception|ERROR\]' "$log" | head -n 20 >&2
     fi
 }
 
