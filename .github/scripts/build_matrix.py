@@ -3,9 +3,8 @@
 
 Two scopes:
 
-  full    every target in SPEC §12's candidate list, on every loader. 45 jobs. This is what runs
-          on a push to main and on a release tag, because §13 requires that CI build every jar
-          that gets published.
+  full    every candidate target, on every loader. 45 jobs. This is what runs on a push to main
+          and on a release tag, because every jar that gets published has to be built by CI.
 
   subset  one target per *known branch point in the source*, per loader. ~20 jobs. This is what
           runs on a pull request, so feedback arrives in minutes instead of tens of minutes.
@@ -28,7 +27,7 @@ import json
 
 LOADERS = ("fabric", "neoforge", "forge")
 
-# SPEC §12's candidate list, verbatim. 1.21.2 is absent deliberately.
+# The candidate target list, matching settings.gradle.kts. 1.21.2 is absent deliberately.
 ALL_TARGETS = [
     "1.21", "1.21.1", "1.21.3", "1.21.4", "1.21.5", "1.21.6", "1.21.7", "1.21.8",
     "1.21.9", "1.21.10", "1.21.11",
@@ -83,7 +82,7 @@ def build(scope: str) -> list[dict[str, str]]:
             include.append({
                 "loader": loader,
                 "mc": target,
-                # 26.1 and later require Java 25; 1.21.x builds on 21. SPEC §1.
+                # 26.1 and later require Java 25; 1.21.x builds on 21.
                 "java": "25" if target.startswith("26.") else "21",
                 "why": targets[target],
             })

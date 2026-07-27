@@ -1,7 +1,7 @@
 name: Build
 
-# SPEC §13: nothing is published from a local machine, so CI has to be the thing that builds every
-# jar. Two scopes, because building all forty-five loader targets takes long enough that doing it on
+# Nothing is published from a local machine, so CI has to be the thing that builds every jar. Two
+# scopes, because building all forty-five loader targets takes long enough that doing it on
 # every push to a branch would make the feedback useless:
 #
 #   pull request      -> core, bukkit, and one loader target per branch point in the source (~20)
@@ -100,7 +100,7 @@ jobs:
 
       - uses: gradle/actions/setup-gradle@v5
 
-      # The §9 suite is the regression gate for the safety claim. It runs on its own, first, and
+      # The core suite is the regression gate for the safety claim. It runs on its own, first, and
       # fast — if this is red nothing else matters.
       - run: ./gradlew :core:test
 
@@ -143,15 +143,15 @@ jobs:
     runs-on: ubuntu-latest
     needs: plan
     strategy:
-      # SPEC §13. One target failing tells you nothing about the other forty-four, and the whole
-      # point of the matrix is to learn which ones break.
+      # One target failing tells you nothing about the other forty-four, and the whole point of
+      # the matrix is to learn which ones break.
       fail-fast: false
       matrix: ${{ fromJSON(needs.plan.outputs.matrix) }}
     steps:
       - uses: actions/checkout@v5
 
-      # Both toolchains, always. Gradle picks per target — 21 for 1.21.x, 25 for 26.x (SPEC §1) —
-      # by finding the JAVA_HOME_*_X64 variables setup-java exports. Installing only the one this
+      # Both toolchains, always. Gradle picks per target — 21 for 1.21.x, 25 for 26.x — by finding
+      # the JAVA_HOME_*_X64 variables setup-java exports. Installing only the one this
       # target needs would work until a shared module wanted the other.
       - uses: actions/setup-java@v5
         with:

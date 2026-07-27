@@ -8,12 +8,12 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 
 /**
- * SPEC §8 dimension transitions. Exactly one per journey.
+ * Dimension transitions. Exactly one per journey.
  *
  * <p>Unlimited transitions would be an abuse vector in itself: each transit resets the origin,
  * so a cart bouncing through a portal loops the progress rule forever.
  */
-@DisplayName("§8 dimension transitions")
+@DisplayName("Dimension transitions")
 class DimensionsTest extends EngineTest {
 
     @Test

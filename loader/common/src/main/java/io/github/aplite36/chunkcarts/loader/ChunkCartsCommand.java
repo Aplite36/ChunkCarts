@@ -19,7 +19,7 @@ import java.util.function.Predicate;
 import java.util.function.Supplier;
 
 /**
- * {@code /chunkcarts list|reload|debug} (SPEC §10).
+ * {@code /chunkcarts list|reload|debug}.
  *
  * <p>{@code list} matters more than it looks: it is how an admin checks that the mod is not doing
  * anything it should not be. A cluster is one row showing its cart count, so the row count
@@ -28,7 +28,7 @@ import java.util.function.Supplier;
 public final class ChunkCartsCommand {
 
     /**
-     * SPEC §10 asks for the single permission {@code chunkcarts.admin}. From 1.21.11 the game can
+     * The design calls for the single permission {@code chunkcarts.admin}. From 1.21.11 the game can
      * express exactly that — permissions became named atoms rather than only numeric levels — and
      * before that there is nothing to express it with, so the check is gamemaster level alone.
      *
@@ -56,7 +56,7 @@ public final class ChunkCartsCommand {
 
     public void register(CommandDispatcher<CommandSourceStack> dispatcher) {
         dispatcher.register(build("chunkcarts"));
-        // No /cc alias: it collides with chat-clear commands on a great many servers (SPEC §10).
+        // No /cc alias: it collides with chat-clear commands on a great many servers.
         dispatcher.register(build("ccarts"));
     }
 
@@ -104,9 +104,9 @@ public final class ChunkCartsCommand {
     }
 
     /**
-     * Named only while the §5 clamp is actually holding the loop below the configured interval. An
-     * admin who set 10 and sees the loop running at 2 should be able to find out why here, rather
-     * than reading it as the mod ignoring the config.
+     * Named only while the velocity clamp is actually holding the loop below the configured
+     * interval. An admin who set 10 and sees the loop running at 2 should be able to find out why
+     * here, rather than reading it as the mod ignoring the config.
      */
     private static String clampedInterval(ChunkCartsEngine engine) {
         int effective = engine.effectivePollIntervalTicks();
@@ -116,7 +116,7 @@ public final class ChunkCartsCommand {
 
     private int reload(CommandSourceStack source) {
         // Every ticket is released and every journey re-read from the cart's own data, which is the
-        // source of truth (SPEC §7). Carts in flight carry on; they do not need a fresh token,
+        // source of truth. Carts in flight carry on; they do not need a fresh token,
         // because resuming a restored journey is not a departure.
         mod.reloadRuntime();
         send(source, "Config reloaded. Enforcement: " + mod.engine().config().enforcement() + ".");

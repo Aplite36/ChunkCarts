@@ -13,7 +13,7 @@ dependencies {
     implementation(project(":core"))
 
     // Compiled against the 1.21 API floor. Bukkit is forward-compatible at runtime but
-    // not backward, so the floor is what makes one jar cover 1.21 -> 26.2 (SPEC §1).
+    // not backward, so the floor is what makes one jar cover 1.21 -> 26.2.
     // Do not raise this to chase a newer API without re-reading that constraint.
     compileOnly("io.papermc.paper:paper-api:1.21-R0.1-SNAPSHOT")
 }
@@ -37,7 +37,7 @@ tasks.jar {
     enabled = false
 }
 
-// chunkcarts-<version>+bukkit.jar per SPEC §11.
+// chunkcarts-<version>+bukkit.jar
 tasks.shadowJar {
     archiveBaseName = "chunkcarts"
     archiveVersion = "$version+bukkit"

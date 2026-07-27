@@ -10,7 +10,7 @@ public record ChunkPos(WorldId world, int cx, int cz) {
     }
 
     /**
-     * Chebyshev chunk distance, the metric the progress rule uses (SPEC §3.1). Chebyshev rather
+     * Chebyshev chunk distance, the metric the progress rule uses. Chebyshev rather
      * than Euclidean so a diagonal route is not penalised against a straight one.
      *
      * @throws IllegalArgumentException if the two positions are in different worlds, which would

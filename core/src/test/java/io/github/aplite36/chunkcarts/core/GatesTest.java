@@ -12,8 +12,8 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-/** SPEC §4 departure gates, plus the in-flight re-checks from §5 step 4. */
-@DisplayName("§4 departure gates")
+/** Departure gates, plus the in-flight re-checks. */
+@DisplayName("Departure gates")
 class GatesTest extends EngineTest {
 
     @Test
@@ -121,9 +121,9 @@ class GatesTest extends EngineTest {
                 "interrupting a journey in flight would strand the cart mid-route");
     }
 
-    // ---- departure-requirement: PLAYER_ONLINE (§6) ---------------------------------------------
+    // ---- departure-requirement: PLAYER_ONLINE -------------------------------------------------
     //
-    // The one gate whose input the fakes cannot produce: nothing on the §1.1 platform surface can
+    // The one gate whose input the fakes cannot produce: nothing on the platform surface can
     // answer "is any player online anywhere", so the adapter pushes it in with setPlayersOnline
     // from the join and quit events. These four tests are what let the tier be advertised as
     // supported rather than merely present in the enum.

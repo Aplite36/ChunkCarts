@@ -14,7 +14,7 @@ import java.util.Map;
 import java.util.Set;
 
 /**
- * Holds chunks with a custom chunk ticket (SPEC §1.1).
+ * Holds chunks with a custom chunk ticket.
  *
  * <p><strong>The ticket level is the classic silent failure of this project.</strong> A chunk held
  * at border level loads but does not tick: the cart sits motionless, every unit test passes, and the
@@ -51,13 +51,13 @@ public final class LevelTicketBackend implements ChunkTicketBackend {
      * mod stops working after five seconds.</strong>
      *
      * <p>The ticket carries a 100-tick timeout so that a crash cannot leak a permanently loaded
-     * chunk (SPEC §1.1), which means something has to keep renewing it. {@code core} cannot: it
+     * chunk, which means something has to keep renewing it. {@code core} cannot: it
      * calls {@link #hold} once, when a chunk <em>enters</em> the region, and never again while the
      * chunk stays in it — correct for Paper, where a plugin ticket does not expire, and silently
      * fatal here. Measured on 26.2 before this existed: a cart three chunks into a journey was
      * reported as holding nine chunks of which three were {@code BLOCK_TICKING} and three had
-     * decayed all the way to {@code FULL}, i.e. loaded and not ticking — the exact failure §1.1
-     * warns about, arriving on a delay rather than at the first hold.
+     * decayed all the way to {@code FULL}, i.e. loaded and not ticking — the exact failure this
+     * renewal guards against, arriving on a delay rather than at the first hold.
      *
      * <p>Forty ticks is two and a half renewals inside every timeout, and it is deliberately
      * independent of {@code poll-interval-ticks}: that value is the admin's, and nothing stops them
@@ -146,13 +146,13 @@ public final class LevelTicketBackend implements ChunkTicketBackend {
     }
 
     /**
-     * Releases everything (SPEC §1.1). Without it, held chunks leak until the next restart — a
+     * Releases everything. Without it, held chunks leak until the next restart — a
      * failure the server owner sees and we never do.
      *
      * <p>There is no sweep to do afterwards, unlike the Bukkit module: the ticket carries a timeout,
      * so anything this misses expires on its own within a hundred ticks. That self-expiry is also
-     * what makes a hard crash safe here, which is the reason §1.1 specifies a timeout on the loader
-     * ticket in the first place.
+     * what makes a hard crash safe here, which is the reason the loader ticket carries a timeout
+     * in the first place.
      */
     @Override
     public void releaseAll() {

@@ -3,7 +3,7 @@ package io.github.aplite36.chunkcarts.loader;
 import io.github.aplite36.chunkcarts.core.ChunkCartsEngine;
 
 /**
- * What {@code /chunkcarts} needs from whichever loader's entry point is running (SPEC §10).
+ * What {@code /chunkcarts} needs from whichever loader's entry point is running.
  *
  * <p>The command is identical on every loader — it reads the engine and prints — so it is shared,
  * and this interface is the one thing it cannot get from {@code core}: the running adapter's own

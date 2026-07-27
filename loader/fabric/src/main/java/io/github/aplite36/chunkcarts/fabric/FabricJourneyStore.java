@@ -19,10 +19,10 @@ import java.util.Base64;
 import java.util.Optional;
 
 /**
- * {@link JourneyStore} on Fabric's data attachments (SPEC §7).
+ * {@link JourneyStore} on Fabric's data attachments.
  *
  * <p>Attachments are the direct analogue of Bukkit's persistent data container: they serialise into
- * the entity's NBT, which is the shared-fate property §7 depends on.
+ * the entity's NBT, which is the shared-fate property this store relies on.
  *
  * <p>Raw bytes with a schema version in byte zero, base64-encoded because the value has to go
  * through a {@link Codec} and a string is the one representation that is stable across every NBT

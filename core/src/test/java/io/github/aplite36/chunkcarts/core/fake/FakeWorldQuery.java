@@ -18,7 +18,7 @@ import java.util.concurrent.CompletableFuture;
  * test opts into rather than a trap every other test has to remember to disarm.
  *
  * <p><strong>Player-loaded chunks are tracked completely separately from the ticket backend</strong>
- * and this fake has no access to it. That is deliberate: it mirrors the constraint from §3.3 that
+ * and this fake has no access to it. That is deliberate: it mirrors the constraint that
  * a chunk the plugin is holding must never grant a token. If this fake could see held chunks, the
  * circularity guard test could pass while the real adapter was wrong.
  */

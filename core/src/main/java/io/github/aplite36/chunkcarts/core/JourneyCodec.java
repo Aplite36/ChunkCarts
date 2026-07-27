@@ -13,7 +13,7 @@ import java.util.Set;
 import java.util.UUID;
 
 /**
- * Serialises {@link JourneyRecord} to the raw bytes an entity carries (SPEC §7).
+ * Serialises {@link JourneyRecord} to the raw bytes an entity carries.
  *
  * <p>The first byte is the schema version. An unrecognised version means <strong>discard, not
  * migrate</strong>: carts written by an old version will be sitting in unloaded chunks all over

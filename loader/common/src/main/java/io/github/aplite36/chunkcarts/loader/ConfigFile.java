@@ -15,7 +15,7 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 
 /**
- * Reads {@code config/chunkcarts.yml} (SPEC §6), writing the annotated default on first run.
+ * Reads {@code config/chunkcarts.yml}, writing the annotated default on first run.
  *
  * <p>The schema itself lives in {@code core}'s {@code ConfigReader}, which takes a plain nested map;
  * this class only has to produce that map. Doing it with SnakeYAML rather than a hand-written reader

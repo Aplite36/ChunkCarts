@@ -12,7 +12,7 @@
 #   .github/scripts/smoke_test.sh <fabric|neoforge|forge> <mc-version> <dir-containing-the-jar>
 #
 # Deliberately narrow: one game version, three loaders, "did it start". It is not a functional test
-# of journeys — that is §9's suite in core/ and the in-game runs recorded per loader. Widening this
+# of journeys — that is the suite in core/ and the in-game runs recorded per loader. Widening this
 # into a gameplay test would mean a headless client, and it would rot.
 set -euo pipefail
 

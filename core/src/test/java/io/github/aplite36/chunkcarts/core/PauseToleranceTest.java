@@ -11,12 +11,12 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * SPEC §3.4. One tolerance, two labels, and the fix for the hole the progress rule cannot see.
+ * One tolerance, two labels, and the fix for the hole the progress rule cannot see.
  *
  * <p>Slack accrues per chunk <em>entered</em>, so a cart that stops changing chunk never accrues
  * any and would hold its region indefinitely. This is the mechanism that closes that.
  */
-@DisplayName("§3.4 pause tolerance")
+@DisplayName("Pause tolerance")
 class PauseToleranceTest extends EngineTest {
 
     @Test

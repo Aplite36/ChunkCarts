@@ -21,7 +21,7 @@ import java.util.Comparator;
  * chunk should survive into the save file — and {@code FLAG_CAN_EXPIRE_IF_UNLOADED}, which is
  * about tickets that give up before their chunk arrives.
  *
- * <p>The 100-tick timeout is SPEC §1.1's, and it is the crash story: the travel loop re-adds the
+ * <p>The 100-tick timeout is deliberate, and it is the crash story: the travel loop re-adds the
  * ticket every poll, so a server that dies mid-journey drops every held chunk within five
  * seconds instead of leaking it until someone notices.
  *
@@ -30,7 +30,7 @@ import java.util.Comparator;
  * {@code chunkcarts:journey} in a debug dump instead of as an anonymous record.
  *
  * <p>Shared by every loader because it is pure Minecraft — NeoForge and Forge add no ticket API of
- * their own that this needs. It is also the highest-risk code in the project (§1.1: registration
+ * their own that this needs. It is also the highest-risk code in the project (registration
  * fails silently), so it exists exactly once and is verified in-game per platform rather than
  * re-derived per adapter.
  */

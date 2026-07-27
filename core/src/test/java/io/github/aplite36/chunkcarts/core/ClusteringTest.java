@@ -11,12 +11,12 @@ import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * SPEC §8 clustering. Carts in contact form one journey: shared budget, shared region, one slot.
+ * Clustering. Carts in contact form one journey: shared budget, shared region, one slot.
  *
  * <p>Per-cart journeys would let twenty carts on one track consume twenty slots and instantly
  * exhaust a cap of sixteen — a self-inflicted denial of service.
  */
-@DisplayName("§8 clustering")
+@DisplayName("Clustering")
 class ClusteringTest extends EngineTest {
 
     /** Two carts a couple of blocks apart, i.e. touching on the same track. */

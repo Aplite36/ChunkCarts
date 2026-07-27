@@ -11,12 +11,12 @@ import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * SPEC §3.5 clamps and §6 enforcement.
+ * Clamps and enforcement.
  *
  * <p>Without clamps, permissive behaviour exists implicitly via extreme thresholds and the
  * enforcement flag becomes theatre. That is the whole point of this file.
  */
-@DisplayName("§3.5 clamps and §6 enforcement")
+@DisplayName("Clamps and enforcement")
 class EnforcementModeTest extends EngineTest {
 
     private Config.Resolution resolveStrict(Config.Builder builder) {

@@ -9,11 +9,11 @@ import net.minecraft.world.entity.vehicle.minecart.AbstractMinecart;
 import java.util.Optional;
 
 /**
- * Where a cart's journey state lives between polls (SPEC §7).
+ * Where a cart's journey state lives between polls.
  *
  * <p>The one part of {@link LevelCartView} that is not plain Minecraft. Every loader has an
  * attach-arbitrary-data-to-an-entity mechanism and no two of them are the same type, but all of
- * them serialise into the entity's own NBT — which is the property §7 actually depends on: state
+ * them serialise into the entity's own NBT — which is the property this design depends on: state
  * dies with the entity, travels with it between dimensions, and rolls back with the world if an
  * admin restores a backup.
  *

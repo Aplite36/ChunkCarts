@@ -41,14 +41,14 @@ import java.util.UUID;
 import java.util.stream.Collectors;
 
 /**
- * Entry point and wiring (SPEC §12 step 7). Owns nothing policy-shaped: every rule lives in
+ * Entry point and wiring. Owns nothing policy-shaped: every rule lives in
  * {@code core}, and this class exists to hand it a clock, a world, a ticket backend and a list of
  * carts.
  *
  * <p>The runtime is rebuilt wholesale on {@code /chunkcarts reload} rather than mutated, because a
  * half-reloaded config — new clamps applied to journeys started under the old ones — is a state
  * nothing is tested against. Rebuilding releases every ticket and re-reads each journey from the
- * carts themselves, which is the source of truth anyway (SPEC §7).
+ * carts themselves, which is the source of truth anyway.
  */
 public final class ChunkCartsFabric implements ModInitializer, ChunkCartsMod {
 
@@ -59,7 +59,7 @@ public final class ChunkCartsFabric implements ModInitializer, ChunkCartsMod {
     private static final String TRAVEL_LOOP = "chunkcarts-travel-loop";
 
     /**
-     * Mods that also hold chunks <em>for minecarts</em>. Both cannot be right (SPEC §8).
+     * Mods that also hold chunks <em>for minecarts</em>. Both cannot be right.
      *
      * <p>Deliberately not a list of every chunk-loading mod. A player who deliberately force-loads
      * their base is not making ChunkCarts' guarantee false; a second mod that loads chunks because a
@@ -155,7 +155,7 @@ public final class ChunkCartsFabric implements ModInitializer, ChunkCartsMod {
         return debug;
     }
 
-    /** Tears the runtime down and builds it again from the file on disk (SPEC §10). */
+    /** Tears the runtime down and builds it again from the file on disk. */
     @Override
     public void reloadRuntime() {
         MinecraftServer running = server;
@@ -200,12 +200,12 @@ public final class ChunkCartsFabric implements ModInitializer, ChunkCartsMod {
     }
 
     /**
-     * One cycle of the travel loop, plus the §5 velocity clamp the engine asked for.
+     * One cycle of the travel loop, plus the velocity clamp the engine asked for.
      *
      * <p>The interval is read after the cycle, not before: departures happen at the end of a cycle,
      * and a cart fast enough to need a shorter interval usually announces itself by departing. The
      * engine is the only thing that may choose this number, because the same number is what its TPS
-     * monitor expects the gap between polls to be (SPEC §4.2).
+     * monitor expects the gap between polls to be.
      */
     private void runTravelLoop() {
         tracker.poll();
@@ -225,7 +225,7 @@ public final class ChunkCartsFabric implements ModInitializer, ChunkCartsMod {
         }
         if (engine != null) {
             // Releases every ticket and sweeps for anything we lost track of. Without this, held
-            // chunks stay up until their ticket expires (SPEC §8).
+            // chunks stay up until their ticket expires.
             engine.shutdown();
         }
         engine = null;
@@ -240,7 +240,7 @@ public final class ChunkCartsFabric implements ModInitializer, ChunkCartsMod {
         if (scheduler == null) {
             return;
         }
-        // Cheaper and more reliable than tracking join and quit events: §1.1 has the adapter push
+        // Cheaper and more reliable than tracking join and quit events: the adapter pushes
         // this flag, and the player list is the thing the flag is about. Reading it once per tick
         // costs a size check and cannot drift out of step with reality the way an event pair can.
         engine.setPlayersOnline(!ticking.getPlayerList().getPlayers().isEmpty());
@@ -249,7 +249,7 @@ public final class ChunkCartsFabric implements ModInitializer, ChunkCartsMod {
     }
 
     /**
-     * Registers carts as they appear (SPEC §7). One event covers what Bukkit needs three for: a
+     * Registers carts as they appear. One event covers what Bukkit needs three for: a
      * chunk loading, a dispenser firing, and a player placing a cart all arrive here, so a
      * dispenser-fed station — the archetypal ChunkCarts setup — needs no special case.
      *
@@ -297,7 +297,7 @@ public final class ChunkCartsFabric implements ModInitializer, ChunkCartsMod {
      * did it and where; {@link #claimPlacement} attributes the entity that appears next.
      *
      * <p>Deliberately narrow. A hopper pushing items into a cart is not interaction, and treating it
-     * as one is exactly how an automated loader would waive its own cooldown forever (SPEC §4.1).
+     * as one is exactly how an automated loader would waive its own cooldown forever.
      */
     private InteractionResult onUseBlock(net.minecraft.world.entity.player.Player player,
                                          net.minecraft.world.level.Level level,

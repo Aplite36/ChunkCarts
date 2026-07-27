@@ -6,8 +6,8 @@ import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
-/** SPEC §3.2. The backstop, and the reason routes near populated areas do not fail for free. */
-@DisplayName("§3.2 budget")
+/** The backstop, and the reason routes near populated areas do not fail for free. */
+@DisplayName("Budget")
 class BudgetTest extends EngineTest {
 
     @Test

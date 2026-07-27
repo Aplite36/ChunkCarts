@@ -14,14 +14,14 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * SPEC §6 config schema. The parser lives in {@code core} so it is tested once here rather than
+ * The config schema. The parser lives in {@code core} so it is tested once here rather than
  * four times over in adapters that would quietly diverge.
  *
  * <p>The through-line of this file: <strong>a broken key costs you that key, not the plugin.</strong>
  * A server that fails to load ChunkCarts because of one typo is a server running with no chunk
  * safety at all, which is the outcome this whole project exists to avoid.
  */
-@DisplayName("§6 config reader")
+@DisplayName("Config reader")
 class ConfigReaderTest {
 
     private static Map<String, Object> map(Object... kv) {

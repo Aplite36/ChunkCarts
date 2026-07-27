@@ -11,15 +11,15 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * SPEC §5's poll interval: configurable, and clamped downward on observed velocity.
+ * The poll interval: configurable, and clamped downward on observed velocity.
  *
- * <p>The interval lives here rather than in the adapter because §4.2 derives TPS from the gap
+ * <p>The interval lives here rather than in the adapter because TPS is derived from the gap
  * between polls measured against the interval the task was scheduled at. An adapter that quietly
  * polled faster would read as a server running at a fraction of its speed and would start denying
  * departures — the clamp would silently switch off the plugin on exactly the servers that need it.
  * So {@code core} decides the interval, and the same object tells the TPS monitor what to expect.
  */
-@DisplayName("§5 poll interval")
+@DisplayName("Poll interval")
 class PollIntervalTest extends EngineTest {
 
     /** Advances by whatever interval the engine is currently asking for, then polls. */
@@ -67,8 +67,9 @@ class PollIntervalTest extends EngineTest {
     @Test
     @DisplayName("the interval never exceeds the configured value")
     void intervalNeverExceedsConfiguredValue() {
-        // §5 clamps downward. A slow cart is not licence to poll less often than the admin asked:
-        // the interval is also the arrival-detection resolution, not just a stranding guard.
+        // The interval clamps downward. A slow cart is not licence to poll less often than the
+        // admin asked: the interval is also the arrival-detection resolution, not just a
+        // stranding guard.
         cfg.pollIntervalTicks(10);
 
         FakeCart cart = FakeCart.at(OVERWORLD, 0, 0).velocity(0.1);

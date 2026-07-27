@@ -54,7 +54,7 @@ import java.util.UUID;
 import java.util.stream.Collectors;
 
 /**
- * Entry point and wiring (SPEC §12 step 7). The Forge counterpart of the NeoForge entry point.
+ * Entry point and wiring. The Forge counterpart of the NeoForge entry point.
  *
  * <p>Deliberately kept in the same order and with the same method names as its NeoForge twin, so
  * the two can be read side by side and the divergence is visible rather than buried. The
@@ -83,7 +83,7 @@ import java.util.stream.Collectors;
  * <p>The runtime is rebuilt wholesale on {@code /chunkcarts reload} rather than mutated, because a
  * half-reloaded config — new clamps applied to journeys started under the old ones — is a state
  * nothing is tested against. Rebuilding releases every ticket and re-reads each journey from the
- * carts themselves, which is the source of truth anyway (SPEC §7).
+ * carts themselves, which is the source of truth anyway.
  */
 @Mod(ChunkCarts.MOD_ID)
 public final class ChunkCartsForge implements ChunkCartsMod {
@@ -95,7 +95,7 @@ public final class ChunkCartsForge implements ChunkCartsMod {
     private static final String TRAVEL_LOOP = "chunkcarts-travel-loop";
 
     /**
-     * Mods that also hold chunks <em>for minecarts</em>. Both cannot be right (SPEC §8).
+     * Mods that also hold chunks <em>for minecarts</em>. Both cannot be right.
      *
      * <p>Deliberately not a list of every chunk-loading mod. A player who deliberately force-loads
      * their base is not making ChunkCarts' guarantee false; a second mod that loads chunks because a
@@ -133,8 +133,8 @@ public final class ChunkCartsForge implements ChunkCartsMod {
      * <p>On EventBus 6 every listener names its event class explicitly. The shorter
      * {@code addListener(this::onEntityLoad)} overload exists, but it infers the event type from the
      * consumer's generic signature and a method reference does not carry one, so it fails at
-     * registration time rather than at compile time — the exact silent-wiring failure §1.1 warns
-     * about, on the platform where it is hardest to notice.
+     * registration time rather than at compile time — a silent-wiring failure, on the platform
+     * where it is hardest to notice.
      */
     public ChunkCartsForge(FMLJavaModLoadingContext context) {
         ChunkCartsCommand command = new ChunkCartsCommand(this);
@@ -184,8 +184,8 @@ public final class ChunkCartsForge implements ChunkCartsMod {
      * <p>On EventBus 6 each listener names its event class explicitly. The shorter
      * {@code addListener(this::onEntityLoad)} overload does exist, but it infers the event type from
      * the consumer's generic signature, and a method reference carries none — so it fails when the
-     * listener is registered rather than when it is compiled. That is the silent-wiring failure §1.1
-     * warns about, on the branch where it is hardest to notice, and naming the class avoids it.
+     * listener is registered rather than when it is compiled. That is a silent-wiring failure, on
+     * the branch where it is hardest to notice, and naming the class avoids it.
      */
     private void wireGameEvents(ChunkCartsCommand command) {
         //? if >=1.21.6 {
@@ -228,7 +228,7 @@ public final class ChunkCartsForge implements ChunkCartsMod {
      * {@code getServer()}, exactly as it was under EventBus 6; it became a record exposing
      * {@code server()} at 1.21.9. Read off the 1.21.8 sources after those three targets failed on
      * {@code cannot find symbol: method server()} while 1.21.9 and 1.21.11 compiled — the kind of gap
-     * only building every candidate finds (§12).
+     * only building every candidate finds.
      */
     private void wireServerTick() {
         //? if >=1.21.9 {
@@ -300,7 +300,7 @@ public final class ChunkCartsForge implements ChunkCartsMod {
      *
      * <p>Worth a place in {@code list} rather than hiding behind debug: it is the only in-game
      * evidence for the claim no unit test can reach, that held chunks actually tick. On a platform
-     * where ticket registration fails silently (SPEC §1.1) that is the whole verification.
+     * where ticket registration fails silently that is the whole verification.
      */
     @Override
     public String heldChunkLevels() {
@@ -324,7 +324,7 @@ public final class ChunkCartsForge implements ChunkCartsMod {
         return debug;
     }
 
-    /** Tears the runtime down and builds it again from the file on disk (SPEC §10). */
+    /** Tears the runtime down and builds it again from the file on disk. */
     @Override
     public void reloadRuntime() {
         MinecraftServer running = server;
@@ -370,12 +370,12 @@ public final class ChunkCartsForge implements ChunkCartsMod {
     }
 
     /**
-     * One cycle of the travel loop, plus the §5 velocity clamp the engine asked for.
+     * One cycle of the travel loop, plus the velocity clamp the engine asked for.
      *
      * <p>The interval is read after the cycle, not before: departures happen at the end of a cycle,
      * and a cart fast enough to need a shorter interval usually announces itself by departing. The
      * engine is the only thing that may choose this number, because the same number is what its TPS
-     * monitor expects the gap between polls to be (SPEC §4.2).
+     * monitor expects the gap between polls to be.
      */
     private void runTravelLoop() {
         tracker.poll();
@@ -395,7 +395,7 @@ public final class ChunkCartsForge implements ChunkCartsMod {
         }
         if (engine != null) {
             // Releases every ticket and sweeps for anything we lost track of. Without this, held
-            // chunks stay up until their ticket expires (SPEC §8).
+            // chunks stay up until their ticket expires.
             engine.shutdown();
         }
         engine = null;
@@ -410,7 +410,7 @@ public final class ChunkCartsForge implements ChunkCartsMod {
         if (scheduler == null) {
             return;
         }
-        // Cheaper and more reliable than tracking join and quit events: §1.1 has the adapter push
+        // Cheaper and more reliable than tracking join and quit events: the adapter pushes
         // this flag, and the player list is the thing the flag is about. Reading it once per tick
         // costs a size check and cannot drift out of step with reality the way an event pair can.
         engine.setPlayersOnline(!ticking.getPlayerList().getPlayers().isEmpty());
@@ -419,7 +419,7 @@ public final class ChunkCartsForge implements ChunkCartsMod {
     }
 
     /**
-     * Registers carts as they appear (SPEC §7). One event covers what Bukkit needs three for: a
+     * Registers carts as they appear. One event covers what Bukkit needs three for: a
      * chunk loading, a dispenser firing, and a player placing a cart all arrive here, so a
      * dispenser-fed station — the archetypal ChunkCarts setup — needs no special case.
      *
@@ -473,7 +473,7 @@ public final class ChunkCartsForge implements ChunkCartsMod {
      * did it and where; {@link #claimPlacement} attributes the entity that appears next.
      *
      * <p>Deliberately narrow. A hopper pushing items into a cart is not interaction, and treating it
-     * as one is exactly how an automated loader would waive its own cooldown forever (SPEC §4.1).
+     * as one is exactly how an automated loader would waive its own cooldown forever.
      */
     private void onUseBlock(PlayerInteractEvent.RightClickBlock event) {
         if (event.getLevel().isClientSide()

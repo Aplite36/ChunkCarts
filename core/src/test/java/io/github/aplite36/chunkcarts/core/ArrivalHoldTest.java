@@ -11,13 +11,13 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * SPEC §8 arrival hold. Two settings, and the first is unconditional.
+ * The arrival hold. Two settings, and the first is unconditional.
  *
  * <p>The completion test is <strong>net decrease</strong>, not movement. A hopper minecart parked
  * under a farm's output has items moving constantly inward, so a movement-based test would hold
  * forever — wrong, and wrong in an exploitable direction.
  */
-@DisplayName("§8 arrival hold")
+@DisplayName("Arrival hold")
 class ArrivalHoldTest extends EngineTest {
 
     /** Runs a cart out and brings it to rest, so it terminates ARRIVED and enters the hold. */

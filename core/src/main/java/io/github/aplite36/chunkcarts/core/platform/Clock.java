@@ -5,10 +5,10 @@ package io.github.aplite36.chunkcarts.core.platform;
  * {@code System.nanoTime()} directly in policy code — every time-dependent rule has to be
  * testable without sleeping.
  *
- * <p>Two clocks, deliberately, because the spec needs both and they are not interchangeable:
- * wall-clock millis for anything that must survive a restart (§4.1 cooldown, §3.4 pause
- * tolerance), and a monotonic nano source for scheduler drift (§4.2), which must not jump when
- * the system clock is adjusted.
+ * <p>Two clocks, deliberately, because both are needed and they are not interchangeable:
+ * wall-clock millis for anything that must survive a restart (cooldown, pause tolerance), and a
+ * monotonic nano source for scheduler drift, which must not jump when the system clock is
+ * adjusted.
  */
 public interface Clock {
 

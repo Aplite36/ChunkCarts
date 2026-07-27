@@ -3,7 +3,7 @@ plugins {
 }
 
 // The version whose source tree the IDE and the shared src/ link point at. 26.2 is the newest
-// target, which is where the adapter is written first (SPEC §12).
+// target, which is where the adapter is written first.
 stonecutter active "26.2"
 
 // Deliberately no `stonecutter tasks { order("build") }`, and no `dependsOn` on Stonecutter's own
@@ -14,10 +14,10 @@ stonecutter active "26.2"
 // is what makes configure-on-demand load-bearing here rather than an optimisation; with it, and
 // with nothing realising sibling tasks, the same command configures exactly one project.
 
-// `./gradlew :loader:buildAll` is the §12 measurement: build every candidate, read the failures,
-// and only then collapse the list. There is no built-in equivalent — `:loader:fabric` is the branch
-// container project and builds nothing itself, so `loader:fabric:build` silently resolves to
-// `buildEnvironment` instead.
+// `./gradlew :loader:buildAll` is how the target list gets measured: build every candidate, read
+// the failures, and only then collapse the list. There is no built-in equivalent — `:loader:fabric`
+// is the branch container project and builds nothing itself, so `loader:fabric:build` silently
+// resolves to `buildEnvironment` instead.
 tasks.register("buildAll") {
     group = "chunkcarts"
     description = "Builds every loader target in the Stonecutter tree. Slow — read the note below."

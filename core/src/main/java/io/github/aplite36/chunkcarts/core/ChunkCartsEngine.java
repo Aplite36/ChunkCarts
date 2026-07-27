@@ -18,28 +18,28 @@ import java.util.Set;
 import java.util.UUID;
 
 /**
- * The policy engine. Everything the §3 invariants promise is enforced here, and nothing here
+ * The policy engine. Everything the invariants promise is enforced here, and nothing here
  * touches Minecraft.
  */
 public final class ChunkCartsEngine {
 
     /**
-     * How long a cluster's item total may sit without a net decrease before the unload hold ends
-     * (SPEC §8). The test is <em>decrease</em>, not movement: a hopper cart under a farm's output
+     * How long a cluster's item total may sit without a net decrease before the unload hold ends.
+     * The test is <em>decrease</em>, not movement: a hopper cart under a farm's output
      * has items pouring in forever, and a movement-based test would hold its chunk forever with it.
      */
     static final Duration UNLOAD_COMPLETION_QUIET_PERIOD = Duration.ofSeconds(10);
 
     /**
      * How often a journey that is neither transitioning nor setting records still reaches the
-     * entity (SPEC §7). PDC is the source of truth and the in-memory index is the cache, so the
+     * entity. PDC is the source of truth and the in-memory index is the cache, so the
      * cost of a crash is bounded by this: a few seconds of slack and budget, never the whole
      * journey. Writing per poll instead would be a PDC write per cart twice a second forever.
      */
     static final Duration STATE_FLUSH_INTERVAL = Duration.ofSeconds(5);
 
     /**
-     * The floor under the §5 velocity clamp. At one tick the travel loop runs as often as the
+     * The floor under the velocity clamp. At one tick the travel loop runs as often as the
      * server ticks, and anything faster than that region-radius cannot save.
      */
     static final int MIN_POLL_INTERVAL_TICKS = 1;
@@ -80,12 +80,12 @@ public final class ChunkCartsEngine {
 
     /**
      * Whether any player is online, for {@code departure-requirement: PLAYER_ONLINE}. Pushed in by
-     * the adapter rather than pulled: SPEC §1.1 caps the platform surface at seven operations and
+     * the adapter rather than pulled: the platform surface is capped at seven operations and
      * warns against growing it, and a join/quit event is something every platform already has.
      */
     private boolean playersOnline = true;
 
-    /** The interval the travel loop should be running at right now (SPEC §5). */
+    /** The interval the travel loop should be running at right now. */
     private int pollIntervalTicks;
 
     /** When a longer interval first became warranted, for {@link #INTERVAL_GROWTH_SETTLE}. */
@@ -103,12 +103,12 @@ public final class ChunkCartsEngine {
         this.pollIntervalTicks = this.config.pollIntervalTicks();
     }
 
-    /** The config actually in force, after the §3.5 clamps and floors. */
+    /** The config actually in force, after the clamps and floors. */
     public Config config() {
         return config;
     }
 
-    /** Warnings emitted once at startup — PERMISSIVE mode, ignored {@code unload-hold} (SPEC §6). */
+    /** Warnings emitted once at startup — PERMISSIVE mode, ignored {@code unload-hold}. */
     public List<String> startupWarnings() {
         return startupWarnings;
     }
@@ -120,7 +120,7 @@ public final class ChunkCartsEngine {
 
     /**
      * Observes a cart that is not travelling, granting a token if it sits in a player-loaded
-     * chunk (SPEC §3.3).
+     * chunk.
      *
      * <p>Tokens must never be granted by chunks the plugin itself is holding — self-granting
      * would make the scheme circular and every rule downstream decorative. That guarantee lives
@@ -160,16 +160,16 @@ public final class ChunkCartsEngine {
     }
 
     /**
-     * Evaluates the SPEC §4 gates and departs if all pass.
+     * Evaluates the departure gates and departs if all pass.
      *
      * @param contacts carts in contact with the lead, which become the cluster. Membership is
-     *                 fixed here and not recomputed per poll (SPEC §8)
+     *                 fixed here and not recomputed per poll
      */
     public DepartureOutcome tryDepart(CartView lead, List<CartView> contacts) {
         Objects.requireNonNull(lead, "lead");
         DenialReason denial = gate(lead);
         if (denial != null) {
-            return new DepartureOutcome.Denied(denial);  // no token is spent on a denial (§2.1)
+            return new DepartureOutcome.Denied(denial);  // no token is spent on a denial
         }
 
         long now = clock.nowMillis();
@@ -190,14 +190,14 @@ public final class ChunkCartsEngine {
             journeyByCart.put(member.id(), journey.id);
             CartState state = cartState(member.id());
             state.token = false;                 // consumed on the transition to TRAVELLING
-            state.lastJourneyStartedAt = now;    // the cooldown runs from start, not end (§4.1)
+            state.lastJourneyStartedAt = now;    // the cooldown runs from start, not end
             state.cooldownWaiver = false;        // one interaction, one dispatch
             lastTermination.remove(member.id());
         }
         journeys.put(journey.id, journey);
 
         // An ungenerated chunk under the departure region holds nothing and is not a denial: the
-        // first poll terminates it as UNGENERATED_CHUNK, which is where §5 puts that check.
+        // first poll terminates it as UNGENERATED_CHUNK, which is where that check belongs.
         syncRegion(journey, cluster, true);
         flush(journey, cluster);
 
@@ -209,7 +209,7 @@ public final class ChunkCartsEngine {
     }
 
     /**
-     * One turn of the travel loop (SPEC §5). Also the drift sample for derived TPS (SPEC §4.2),
+     * One turn of the travel loop. Also the drift sample for derived TPS,
      * so it must be called on the scheduler's interval rather than ad hoc.
      */
     public void poll(List<CartView> carts) {
@@ -253,22 +253,22 @@ public final class ChunkCartsEngine {
         return Optional.ofNullable(lastTermination.get(cartId));
     }
 
-    /** Journeys occupying a concurrency slot. PAUSED and HOLDING count (SPEC §8). */
+    /** Journeys occupying a concurrency slot. PAUSED and HOLDING count. */
     public int activeJourneyCount() {
         return journeys.size();
     }
 
-    /** TPS derived from scheduler drift, EMA-smoothed (SPEC §4.2). Never a platform TPS call. */
+    /** TPS derived from scheduler drift, EMA-smoothed. Never a platform TPS call. */
     public double effectiveTps() {
         return tps.effectiveTps();
     }
 
     /**
-     * The interval the travel loop should currently be running at (SPEC §5): the configured value,
+     * The interval the travel loop should currently be running at: the configured value,
      * clamped downward on observed velocity. The adapter reads this after each cycle and
      * reschedules when it changes.
      *
-     * <p>This is decided here rather than in the adapter because §4.2 measures TPS as the ratio of
+     * <p>This is decided here rather than in the adapter because TPS is measured as the ratio of
      * the expected gap between polls to the actual one, and the expected gap <em>is</em> this
      * number. An adapter that quietly rescheduled itself faster would read as a server running at a
      * fraction of its speed, and would answer a fast cart by denying every departure on the server.
@@ -278,8 +278,8 @@ public final class ChunkCartsEngine {
     }
 
     /**
-     * Re-registers a cart from its persisted state on chunk load (SPEC §7), giving it a fresh
-     * pause window (SPEC §7.1) while leaving its cooldown and interaction timestamps alone.
+     * Re-registers a cart from its persisted state on chunk load, giving it a fresh
+     * pause window while leaving its cooldown and interaction timestamps alone.
      */
     public void restore(CartView cart) {
         Optional<byte[]> raw = cart.readState();
@@ -300,7 +300,7 @@ public final class ChunkCartsEngine {
         CartState state = cartState(cart.id());
         state.token = record.token();
         // Both of these are wall-clock and both survive the restart unchanged: downtime
-        // legitimately counts toward a cooldown elapsing (§7.1).
+        // legitimately counts toward a cooldown elapsing.
         state.lastJourneyStartedAt = record.lastJourneyStartedAt();
         state.lastInteractionAt = record.lastInteractionAt();
         // The waiver is a flag in memory but two timestamps on disk. An interaction later than the
@@ -366,10 +366,10 @@ public final class ChunkCartsEngine {
         journeys.clear();
         journeyByCart.clear();
         // The per-cart registry survives: cooldowns and interaction stamps are wall-clock and must
-        // not be forgotten by a reload (§4.1).
+        // not be forgotten by a reload.
     }
 
-    // ---- departure gates, cheapest first (SPEC §4) --------------------------------------------
+    // ---- departure gates, cheapest first -------------------------------------------------------
 
     private DenialReason gate(CartView lead) {
         if (!config.isWorldEnabled(lead.world())) {
@@ -428,7 +428,7 @@ public final class ChunkCartsEngine {
                 || hasToken(cartId);
     }
 
-    // ---- the travel loop (SPEC §5) ------------------------------------------------------------
+    // ---- the travel loop ------------------------------------------------------------------------
 
     private void travel(Journey journey, CartView lead, Map<UUID, CartView> views) {
         long now = clock.nowMillis();
@@ -476,7 +476,7 @@ public final class ChunkCartsEngine {
         boolean progressed = transited || !leadChunk.equals(journey.lastChunk);
         boolean newRecord = false;
 
-        // The progress rule (§3.1). A closed track of any diameter sets its record on the first lap
+        // The progress rule. A closed track of any diameter sets its record on the first lap
         // and can never beat it, so it always dies within the slack allowance.
         if (!transited) {
             int distance = leadChunk.chebyshevTo(journey.origin);
@@ -511,15 +511,15 @@ public final class ChunkCartsEngine {
         }
 
         // Reached only by a journey that survived this poll: the terminating paths above have
-        // already flushed or released. A new record or a state change is a §7 transition and goes
-        // out at once; everything else — slack, budget — rides the timer.
+        // already flushed or released. A new record or a state change is a persistence transition
+        // and goes out at once; everything else — slack, budget — rides the timer.
         boolean transition = transited || newRecord || journey.state != stateBefore;
         if (transition || now - journey.lastFlushAt >= STATE_FLUSH_INTERVAL.toMillis()) {
             flush(journey, membersPresent(journey, views));
         }
     }
 
-    // ---- the §5 velocity clamp on the poll interval --------------------------------------------
+    // ---- the velocity clamp on the poll interval -----------------------------------------------
 
     /**
      * Brings the poll interval in line with the fastest cart in flight.
@@ -553,7 +553,10 @@ public final class ChunkCartsEngine {
         }
     }
 
-    /** Never above the configured interval: §5 clamps downward, and the admin set a resolution. */
+    /**
+     * Never above the configured interval: the clamp only moves downward, and the admin set a
+     * resolution.
+     */
     private int targetPollInterval(double fastest) {
         if (fastest <= 0.0) {
             return config.pollIntervalTicks();
@@ -587,7 +590,7 @@ public final class ChunkCartsEngine {
     }
 
     /**
-     * The leash on static membership (SPEC §8). Without it five carts could fan out to five places
+     * The leash on static membership. Without it five carts could fan out to five places
      * and hold 5 × 9 chunks against one budget and one slot.
      */
     private void dropDrifters(Journey journey, CartView lead, ChunkPos leadChunk,
@@ -679,7 +682,7 @@ public final class ChunkCartsEngine {
         return region;
     }
 
-    // ---- arrival hold (SPEC §8) ---------------------------------------------------------------
+    // ---- arrival hold -----------------------------------------------------------------------
 
     private void serviceHold(Journey journey, Map<UUID, CartView> views) {
         long now = clock.nowMillis();
@@ -724,7 +727,7 @@ public final class ChunkCartsEngine {
         return total;
     }
 
-    // ---- termination (SPEC §2.1) --------------------------------------------------------------
+    // ---- termination -------------------------------------------------------------------------
 
     private void terminate(Journey journey, TerminationReason reason, Map<UUID, CartView> views) {
         for (UUID member : journey.members) {
@@ -767,12 +770,12 @@ public final class ChunkCartsEngine {
         journeys.remove(journey.id);
     }
 
-    // ---- persistence (SPEC §7) ----------------------------------------------------------------
+    // ---- persistence -------------------------------------------------------------------------
 
     /**
      * Writes journey state to the entity. PDC/NBT is the source of truth and the in-memory index is
-     * a cache, so this happens on the §7 transitions — departure, a new record, termination — and
-     * otherwise on {@link #STATE_FLUSH_INTERVAL}, never per poll.
+     * a cache, so this happens on the persisted transitions — departure, a new record,
+     * termination — and otherwise on {@link #STATE_FLUSH_INTERVAL}, never per poll.
      */
     private void flush(Journey journey, List<CartView> members) {
         journey.lastFlushAt = clock.nowMillis();
@@ -831,7 +834,7 @@ public final class ChunkCartsEngine {
         long lastJourneyStartedAt = NEVER;
         long lastInteractionAt = NEVER;
 
-        /** An unspent interaction, worth exactly one waived dispatch (SPEC §4.1). */
+        /** An unspent interaction, worth exactly one waived dispatch. */
         boolean cooldownWaiver;
     }
 }

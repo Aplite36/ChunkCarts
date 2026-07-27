@@ -10,10 +10,10 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * SPEC §3.3 and §4.1. The one-shot property that defeats shuttles, and the cooldown that rate
+ * The one-shot property that defeats shuttles, and the cooldown that rate
  * limits repetition.
  */
-@DisplayName("§3.3 token and §4.1 cooldown")
+@DisplayName("Token and cooldown")
 class TokenTest extends EngineTest {
 
     @Test

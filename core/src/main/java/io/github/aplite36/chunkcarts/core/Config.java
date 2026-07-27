@@ -8,11 +8,11 @@ import java.util.List;
 import java.util.Set;
 
 /**
- * The parsed config (SPEC §6). Lives in {@code core} so the clamp table is unit-tested rather
+ * The parsed config. Lives in {@code core} so the clamp table is unit-tested rather
  * than trusted.
  *
  * <p>This type is plain data and its builder really works — tests need to construct inputs.
- * The <em>policy</em> is {@link #resolve()}, which applies the §3.5 clamps and floors, and that
+ * The <em>policy</em> is {@link #resolve()}, which applies the clamps and floors, and that
  * is unimplemented until step 3.
  */
 public record Config(
@@ -36,7 +36,7 @@ public record Config(
         boolean notifyLastInteractor,
         boolean metrics) {
 
-    // ---- SPEC §3.5 ceilings in STRICT. Named so tests assert against the table, not magic numbers.
+    // ---- Ceilings in STRICT. Named so tests assert against the table, not magic numbers.
     public static final int STRICT_MAX_PROGRESS_SLACK_CHUNKS = 64;
     public static final int STRICT_MAX_JOURNEY_BUDGET_CHUNKS = 1024;
     public static final int STRICT_MAX_REGION_RADIUS = 2;
@@ -45,11 +45,11 @@ public record Config(
     public static final int STRICT_MAX_ARRIVAL_HOLD_TICKS = 200;
     public static final int STRICT_MAX_POLL_INTERVAL_TICKS = 20;
 
-    // ---- SPEC §3.5 floors. The unusual direction; both close specific back doors.
+    // ---- Floors. The unusual direction; both close specific back doors.
     public static final double STRICT_MIN_SPEED_FLOOR = 0.01;
     public static final Duration STRICT_MIN_COOLDOWN_UNDER_NONE = Duration.ofSeconds(60);
 
-    /** Cart types that can never be enabled, whatever the config says (SPEC §4 gate 2). */
+    /** Cart types that can never be enabled, whatever the config says. */
     public static final Set<CartType> NEVER_PERMITTED =
             Set.of(CartType.TNT, CartType.COMMAND_BLOCK, CartType.SPAWNER);
 
@@ -59,7 +59,7 @@ public record Config(
     }
 
     /**
-     * Applies the SPEC §3.5 clamps and floors and reports what was changed.
+     * Applies the clamps and floors and reports what was changed.
      *
      * <p>Clamping matters because without it permissive behaviour exists implicitly via extreme
      * thresholds and the enforcement flag becomes theatre.
@@ -176,7 +176,7 @@ public record Config(
                 .metrics(metrics);
     }
 
-    /** Whether this world may be travelled in (SPEC §4 gate 1, §6 {@code worlds}). */
+    /** Whether this world may be travelled in. */
     public boolean isWorldEnabled(WorldId world) {
         boolean listed = worldList.contains(world.value());
         return worldsMode == WorldsMode.ALLOWLIST ? listed : !listed;

@@ -8,15 +8,15 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 
 /**
- * Schedules the travel loop (SPEC §1.1).
+ * Schedules the travel loop.
  *
- * <p>The interval is also the measuring stick for derived TPS (SPEC §4.2): the expected gap between
+ * <p>The interval is also the measuring stick for derived TPS: the expected gap between
  * runs is {@code intervalTicks × 50ms}, and {@code core} reads the shortfall as load. That only
  * holds while the task runs on the interval {@code core} believes it is running on, which is why
  * nothing here coalesces or skips a run — a "helpful" adapter that dropped one would be reported as
  * a lagging server and would start denying departures.
  *
- * <p>{@link #reschedule} exists for one thing only: the §5 velocity clamp, where the engine itself
+ * <p>{@link #reschedule} exists for one thing only: the velocity clamp, where the engine itself
  * decides the loop should run more often and tells its TPS monitor the same number. Nothing in this
  * class may change an interval on its own initiative.
  */

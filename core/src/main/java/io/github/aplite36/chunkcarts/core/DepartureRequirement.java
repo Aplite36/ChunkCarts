@@ -1,11 +1,11 @@
 package io.github.aplite36.chunkcarts.core;
 
-/** SPEC §6. What a cart must satisfy before it may begin a journey. */
+/** What a cart must satisfy before it may begin a journey. */
 public enum DepartureRequirement {
 
     /**
      * Any qualifying cart may depart. The cooldown is the only limit, which is why it gains a
-     * 60s floor in STRICT under this setting and not the others (SPEC §3.5).
+     * 60s floor in STRICT under this setting and not the others.
      */
     NONE,
 

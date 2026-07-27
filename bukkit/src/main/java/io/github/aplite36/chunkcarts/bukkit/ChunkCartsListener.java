@@ -36,7 +36,7 @@ final class ChunkCartsListener implements Listener {
     }
 
     /**
-     * Re-registers carts as their chunks come back (SPEC §7). Entity NBT is the source of truth,
+     * Re-registers carts as their chunks come back. Entity NBT is the source of truth,
      * so a cart that was travelling before a restart resumes from its own state rather than from
      * anything the plugin kept.
      */
@@ -100,7 +100,7 @@ final class ChunkCartsListener implements Listener {
     /**
      * Opening a chest cart's inventory counts, however it was opened. A hopper pushing items in
      * does not — that is not an event a player caused, and treating it as one is exactly how an
-     * automated loader would waive its own cooldown forever (SPEC §4.1).
+     * automated loader would waive its own cooldown forever.
      */
     @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
     public void onInventoryOpen(InventoryOpenEvent event) {

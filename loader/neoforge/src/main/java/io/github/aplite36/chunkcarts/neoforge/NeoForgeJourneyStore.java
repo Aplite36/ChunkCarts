@@ -17,7 +17,7 @@ import java.util.Optional;
 import java.util.function.Supplier;
 
 /**
- * {@link JourneyStore} on NeoForge's data attachments (SPEC §7).
+ * {@link JourneyStore} on NeoForge's data attachments.
  *
  * <p>The same mechanism as the Fabric implementation and the same wire format — base64 in the
  * entity's NBT — deliberately, so a world moved between the two loaders keeps its journeys. What

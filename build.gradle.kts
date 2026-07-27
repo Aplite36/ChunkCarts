@@ -11,7 +11,7 @@ tasks.wrapper {
 }
 
 // ───────────────────────────────────────────────────────────────────────────────────────────────
-// Publishing — SPEC §13
+// Publishing
 //
 // Publishing reads jars out of a directory, not out of this build's outputs. That is deliberate.
 // The forty-six jars are built by forty-six separate CI jobs on forty-six separate machines and
@@ -83,7 +83,7 @@ if (distDir != null) {
     val allGameVersions = loaderArtifacts.map { it.mc }.distinct().sortedWith(byVersion)
 
     // The Bukkit jar covers the whole range in one file, so its Modrinth entry is tagged with all
-    // of them — §13. Paper and Purpur only: `bukkit` or `spigot` would advertise a platform where
+    // of them. Paper and Purpur only: `bukkit` or `spigot` would advertise a platform where
     // Paper's async chunk prefetch does not exist, and the mod would stall the main thread there.
     val bukkitLoaders = listOf("paper", "purpur")
 
@@ -99,7 +99,7 @@ if (distDir != null) {
                 providers.environmentVariable("MODRINTH_TOKEN").getOrNull().isNullOrEmpty(),
         )
 
-        // §13 ships v0.1 on the beta channel. Tied to the version rather than hardcoded, so the
+        // v0.1 ships on the beta channel. Tied to the version rather than hardcoded, so the
         // 1.0 release does not go out on beta because nobody remembered to edit this line.
         type.set(if (projectVersion.startsWith("0.")) BETA else STABLE)
         changelog.set(releaseNotes)

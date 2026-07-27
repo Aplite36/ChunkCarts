@@ -14,8 +14,8 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-/** SPEC §7 persistence, and §7.1 — the restart reset, without which persistence does not work. */
-@DisplayName("§7 persistence")
+/** Persistence, and the restart reset, without which persistence does not work. */
+@DisplayName("Persistence")
 class PersistenceTest extends EngineTest {
 
     private final JourneyCodec codec = new JourneyCodec();
@@ -127,9 +127,12 @@ class PersistenceTest extends EngineTest {
         assertTerminated(cart, TerminationReason.ARRIVED);
     }
 
-    // ---- flush freshness (SPEC §7) ------------------------------------------------------------
+    // ---- flush freshness -----------------------------------------------------------------------
 
-    /** What is actually on the entity right now, which is the source of truth §7 cares about. */
+    /**
+     * What is actually on the entity right now, which is the source of truth persistence cares
+     * about.
+     */
     private JourneyRecord persisted(FakeCart cart) {
         return cart.readState().flatMap(codec::decode)
                 .orElseThrow(() -> new AssertionError("expected persisted state on " + cart.id()));
@@ -150,7 +153,7 @@ class PersistenceTest extends EngineTest {
 
         assertEquals(3, journeyOf(cart).distanceRecord(), "precondition: the live record moved");
         assertEquals(3, persisted(cart).distanceRecord(),
-                "§7 flushes on a new record; a journey restored from this must not come back at 0");
+                "a new record flushes; a journey restored from this must not come back at 0");
     }
 
     @Test
@@ -178,7 +181,7 @@ class PersistenceTest extends EngineTest {
     @Test
     @DisplayName("state is not written every poll")
     void stateIsNotWrittenEveryPoll() {
-        // The other half of the rule §7 states outright: the in-memory index is the per-poll one,
+        // The other half of the rule stated outright: the in-memory index is the per-poll one,
         // and PDC is written on transitions and a slow timer. A flush per poll would satisfy every
         // freshness test above by writing constantly, on every cart, twice a second.
         cfg.pauseTolerance(Duration.ofSeconds(30));

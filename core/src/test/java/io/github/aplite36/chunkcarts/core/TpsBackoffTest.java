@@ -11,13 +11,13 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * SPEC §4.2. TPS derived from scheduler drift rather than a platform API.
+ * TPS derived from scheduler drift rather than a platform API.
  *
  * <p>One implementation, unit-testable with a fake clock, correct on every platform including
  * Folia — where it measures the region that actually matters. This file is why that choice is
  * testable at all: there is no {@code currentTps()} on the adapter surface to stub.
  */
-@DisplayName("§4.2 TPS backoff")
+@DisplayName("TPS backoff")
 class TpsBackoffTest extends EngineTest {
 
     /** Runs polls at the given real interval, where the expected interval is 10 ticks = 500ms. */

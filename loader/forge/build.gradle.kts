@@ -1,5 +1,5 @@
-// Shared by every node under loader/forge/versions/. The third loader branch, and — per SPEC §12 —
-// a separate adapter rather than a NeoForge variant: the package roots differ outright
+// Shared by every node under loader/forge/versions/. The third loader branch, and a separate
+// adapter rather than a NeoForge variant: the package roots differ outright
 // (net.minecraftforge.* against net.neoforged.*), so nothing in the loader-specific half compiles
 // against both.
 
@@ -35,7 +35,7 @@ val snakeyamlVersion = "2.6"
 // Fabric and NeoForge branches; src/main/java/.../chunkcarts/loader is a symlink to it. It has to
 // be a symlink rather than an extra srcDir — see the comment in the Fabric buildscript.
 
-// SPEC §1: 21 for 1.21.x, 25 for 26.x. Note the MDK hard-codes 21 and says so in a comment —
+// Java 21 for 1.21.x, 25 for 26.x. Note the MDK hard-codes 21 and says so in a comment —
 // its own example has not crossed this seam yet, so the number is ours, not theirs.
 val javaTarget = if (stonecutter.eval(mc, ">=26.1")) 25 else 21
 
@@ -95,7 +95,7 @@ dependencies {
     // Bundled for the same reason as on the other two loaders: the config schema in core takes a
     // nested map, and a config.yml copied off a Paper server must parse identically rather than
     // nearly so. Shaded into the jar below rather than going through Forge's jarJar plugin, which
-    // would take over the jar task and the §11 artifact name with it.
+    // would take over the jar task and the artifact name with it.
     implementation("org.yaml:snakeyaml:$snakeyamlVersion")
 
     bundled(project(":core"))
@@ -116,7 +116,7 @@ tasks.processResources {
     from(rootProject.file("config.yml"))
 }
 
-// chunkcarts-<version>+<mcver>-forge.jar per SPEC §11. core/ and SnakeYAML go in directly:
+// chunkcarts-<version>+<mcver>-forge.jar. core/ and SnakeYAML go in directly:
 // neither carries a Minecraft reference, so there is nothing for FG7 to remap.
 tasks.jar {
     from(bundled.elements.map { artifacts -> artifacts.map { zipTree(it.asFile) } }) {

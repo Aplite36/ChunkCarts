@@ -14,9 +14,9 @@ import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * Shared fixture for the §9 suite. No server, no game, milliseconds.
+ * Shared fixture for the suite. No server, no game, milliseconds.
  *
- * <p>The engine is built lazily so a test can adjust {@link #cfg} first — several §9 tests are
+ * <p>The engine is built lazily so a test can adjust {@link #cfg} first — several tests are
  * about config behaviour at construction time, and a pre-built engine would freeze the defaults
  * before the test could speak.
  */
@@ -51,7 +51,7 @@ abstract class EngineTest {
 
     /**
      * Grants a token the only legitimate way: real player presence in the cart's chunk, then an
-     * observation. Never by asserting on chunks the engine itself holds (SPEC §3.3).
+     * observation. Never by asserting on chunks the engine itself holds.
      */
     void grantToken(FakeCart cart) {
         world.withPlayerLoaded(cart.world(), cart.chunkX(), cart.chunkZ());

@@ -4,13 +4,13 @@ import java.util.Set;
 import java.util.UUID;
 
 /**
- * A read-only view of one journey, for {@code /chunkcarts list} (SPEC §10) and for tests.
+ * A read-only view of one journey, for {@code /chunkcarts list} and for tests.
  *
  * <p>A cluster is <strong>one</strong> journey and therefore one snapshot, showing its cart count,
  * so the row count reconciles with {@code max-concurrent-journeys}.
  *
  * @param leadCart the cart that satisfied the departure gates; it owns origin, record, slack
- *                 and budget for the whole cluster (SPEC §8)
+ *                 and budget for the whole cluster
  * @param members  every cart in the cluster, including the lead. Fixed at departure and not
  *                 recomputed per poll
  * @param heldChunks the chunks this journey currently holds tickets for

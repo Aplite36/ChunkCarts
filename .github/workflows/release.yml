@@ -1,7 +1,7 @@
 name: Release
 
-# SPEC §13: every published jar is built by CI from a tagged public commit, so "this jar came from
-# this source" is checkable rather than taken on trust. That only holds if releasing is *only* ever
+# Every published jar is built by CI from a tagged public commit, so "this jar came from this
+# source" is checkable rather than taken on trust. That only holds if releasing is *only* ever
 # this workflow — nothing is uploaded from a laptop.
 #
 # The whole build is delegated to build.yml at full scope rather than reimplemented here. A release

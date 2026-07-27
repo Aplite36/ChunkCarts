@@ -12,7 +12,7 @@ import java.util.Set;
 /**
  * Records what was held and released rather than doing anything.
  *
- * <p>It keeps a full history as well as the live set, because several §9 tests are about the
+ * <p>It keeps a full history as well as the live set, because several tests are about the
  * <em>sequence</em> — that a termination released a region, that a budget was charged once per
  * chunk rather than once per poll — and a live set alone cannot distinguish those.
  */

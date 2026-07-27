@@ -17,7 +17,7 @@ val snakeyamlVersion = "2.6"
 
 // No Loom-style plugin-id split here. ModDevGradle compiles against NeoForge's own distribution,
 // which has always been in official names, so the 26.1 unobfuscation seam is invisible to it.
-// The seam that does exist is the toolchain: SPEC §1, 21 for 1.21.x and 25 for 26.x.
+// The seam that does exist is the toolchain: 21 for 1.21.x and 25 for 26.x.
 val javaTarget = if (stonecutter.eval(mc, ">=26.1")) 25 else 21
 
 java {
@@ -77,7 +77,7 @@ tasks.processResources {
     from(rootProject.file("config.yml"))
 }
 
-// chunkcarts-<version>+<mcver>-neoforge.jar per SPEC §11. core/ and SnakeYAML go in directly:
+// chunkcarts-<version>+<mcver>-neoforge.jar. core/ and SnakeYAML go in directly:
 // neither carries a Minecraft reference, and NeoForge does not remap.
 tasks.jar {
     from(bundled.elements.map { artifacts -> artifacts.map { zipTree(it.asFile) } }) {

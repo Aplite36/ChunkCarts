@@ -29,7 +29,7 @@ import java.util.Optional;
 import java.util.UUID;
 
 /**
- * A live view of one minecart (SPEC §1.1). Reads through to the entity on every call rather than
+ * A live view of one minecart. Reads through to the entity on every call rather than
  * caching, because a view is created fresh each poll and a stale position is the one error that
  * would make every downstream rule wrong at once.
  */
@@ -98,12 +98,12 @@ final class LevelCartView implements CartView {
      * powered rail line reports a motion vector of 1.5 while covering about 0.43 blocks a tick. The
      * vector is the boost the rails applied, before the game clamps movement to the cart's maximum
      * speed — intent, not displacement. Reading it raw makes an ordinary booster track look like a
-     * speed plugin, which over-reacts everywhere: §5 would halve the poll interval on a stock server
-     * for no gain, and §3.4 would call a stopped cart moving.
+     * speed plugin, which over-reacts everywhere: the velocity clamp would halve the poll interval
+     * on a stock server for no gain, and pause tolerance would call a stopped cart moving.
      *
      * <p>{@code MinecartBehavior#getMaxSpeed} is the clamp the game itself applies, so the smaller
-     * of the two is the honest answer. Speed-modifying mods raise it, which is exactly when §5
-     * should fire.
+     * of the two is the honest answer. Speed-modifying mods raise it, which is exactly when the
+     * velocity clamp should fire.
      */
     @Override
     public double velocity() {
@@ -113,9 +113,10 @@ final class LevelCartView implements CartView {
         }
         // Before 1.21.3 there is no MinecartBehavior and AbstractMinecart#getMaxSpeed is protected,
         // so there is no honest clamp to apply and the raw vector is all there is. It over-reports
-        // on a booster track, and over-reporting is the safe direction of the two: §5 shortens the
-        // poll interval it did not need to shorten, costing a little CPU. It cannot make a stopped
-        // cart look like a moving one, because a cart at rest has no motion to over-report.
+        // on a booster track, and over-reporting is the safe direction of the two: the velocity
+        // clamp shortens the poll interval it did not need to shorten, costing a little CPU. It
+        // cannot make a stopped cart look like a moving one, because a cart at rest has no motion
+        // to over-report.
         //? if >=1.21.3 {
         return Math.min(motion.length(), cart.getBehavior().getMaxSpeed(level));
         //?} else
@@ -167,12 +168,12 @@ final class LevelCartView implements CartView {
     }
 
     /**
-     * The journey state, read from the entity's own persistent data (SPEC §7).
+     * The journey state, read from the entity's own persistent data.
      *
      * <p>The mechanism is the loader's — see {@link JourneyStore} — but what it must provide is
      * fixed: data that serialises into the entity's NBT, so state dies with the entity, travels
      * with it between dimensions, and rolls back together with the world if an admin restores a
-     * backup. That shared-fate property is the whole reason §7 puts the source of truth on the
+     * backup. That shared-fate property is the whole reason the source of truth lives on the
      * entity rather than in a file this mod keeps.
      */
     @Override

@@ -25,7 +25,7 @@ import java.util.Set;
 import java.util.UUID;
 
 /**
- * The travel loop's Fabric end (SPEC §5): keeps the set of minecarts the engine can see, hands them
+ * The travel loop's Fabric end: keeps the set of minecarts the engine can see, hands them
  * over each poll, and turns the outcomes into departures and log lines.
  *
  * <p>Carts are tracked in a registry fed by events rather than re-scanned from every level each
@@ -69,7 +69,7 @@ public final class CartTracker {
         return tracked.size();
     }
 
-    /** Registers a cart and restores any journey it carries in its attached data (SPEC §7). */
+    /** Registers a cart and restores any journey it carries in its attached data. */
     public void track(AbstractMinecart cart) {
         if (tracked.putIfAbsent(cart.getUUID(), cart) == null) {
             engine.restore(view(cart));
@@ -158,7 +158,7 @@ public final class CartTracker {
 
     /**
      * The carts that depart as one cluster: everything reachable from the lead through a chain of
-     * contacts (SPEC §8). A train is a chain, not a ball, so a plain radius search around the lead
+     * contacts. A train is a chain, not a ball, so a plain radius search around the lead
      * alone would find the second cart and miss the third.
      *
      * <p>Carts already travelling are excluded. Membership is assigned at departure, and sweeping one
@@ -199,7 +199,7 @@ public final class CartTracker {
     }
 
     /**
-     * Logs where and why a journey ended (SPEC §8). The reason is the whole point: without it,
+     * Logs where and why a journey ended. The reason is the whole point: without it,
      * working-as-intended loop detection is indistinguishable from a bug report.
      */
     private void reportEnd(UUID cartId, TerminationReason reason) {
@@ -211,7 +211,7 @@ public final class CartTracker {
         String type = cart == null ? "minecart" : LevelCartView.typeOf(cart).name();
         String line = "Journey ended: " + reason + " — " + type + " at " + where;
 
-        // ARRIVED and WORLD_DISABLED are DEBUG in §2.1: one is the normal end of a journey and the
+        // ARRIVED and WORLD_DISABLED are DEBUG-level: one is the normal end of a journey and the
         // other is the mod being told to stay out of a world. The rest are worth a line.
         if (reason == TerminationReason.ARRIVED || reason == TerminationReason.WORLD_DISABLED) {
             if (debug) {
@@ -227,7 +227,7 @@ public final class CartTracker {
         }
     }
 
-    /** Dropped rather than queued if the player is offline — queueing is persistent state (§8). */
+    /** Dropped rather than queued if the player is offline — queueing is persistent state. */
     private void notifyInteractor(UUID cartId, String line) {
         UUID playerId = lastInteractor.get(cartId);
         if (playerId == null) {

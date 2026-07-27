@@ -1,12 +1,12 @@
 package io.github.aplite36.chunkcarts.core;
 
 /**
- * Why a departure was refused, in the gate order of SPEC §4 (cheapest first).
+ * Why a departure was refused, in gate order (cheapest first).
  *
- * <p><strong>A denial is not a termination and must never consume the token.</strong> SPEC §2.1
- * names four of these explicitly; the rest correspond to gates 1–4 and 6, which the §9 suite
- * tests by name ({@code disabledWorldBlocksDeparture}, {@code tntCartNeverDeparts},
- * {@code belowSpeedThresholdDoesNotDepart}) and therefore need to be distinguishable.
+ * <p><strong>A denial is not a termination and must never consume the token.</strong> Gates 1–4
+ * and 6 correspond to reasons the test suite tests by name ({@code disabledWorldBlocksDeparture},
+ * {@code tntCartNeverDeparts}, {@code belowSpeedThresholdDoesNotDepart}) and therefore need to be
+ * distinguishable.
  */
 public enum DenialReason {
 

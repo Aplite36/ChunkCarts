@@ -1,7 +1,7 @@
 package io.github.aplite36.chunkcarts.core;
 
 /**
- * The journey lifecycle from SPEC §2.
+ * The journey lifecycle.
  *
  * <p>{@link #PAUSED} and {@link #HOLDING} both hold chunks, so both occupy a slot against
  * {@code max-concurrent-journeys} and both appear in {@code /chunkcarts list}.

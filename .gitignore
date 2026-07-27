@@ -39,7 +39,9 @@ out/
 CLAUDE.md
 CLAUDE.local.md
 .claude/
-docs/SPEC.md
+
+# Design documents — the whole folder stays out of the public repo
+docs/
 
 # OS
 .DS_Store

@@ -11,7 +11,7 @@ import java.util.Set;
 import java.util.function.Consumer;
 
 /**
- * Turns the parsed contents of {@code config.yml} into a {@link Config.Builder} (SPEC §6).
+ * Turns the parsed contents of {@code config.yml} into a {@link Config.Builder}.
  *
  * <p>Lives in {@code core} rather than in each adapter so the schema is unit-tested once and the
  * three loader adapters cannot drift from the Bukkit one. It takes a plain nested {@code Map},
@@ -40,7 +40,7 @@ public final class ConfigReader {
             "pause-tolerance", "arrival-hold-ticks", "unload-hold", "metrics",
             CART_TYPES, WORLDS, STRANDED);
 
-    /** The config key for each cart type, or null for one that has no key at all (SPEC §4). */
+    /** The config key for each cart type, or null for one that has no key at all. */
     private static final Map<CartType, String> CART_TYPE_KEYS = Map.of(
             CartType.NORMAL, "normal",
             CartType.CHEST, "chest",

@@ -1,7 +1,7 @@
 package io.github.aplite36.chunkcarts.core;
 
 /**
- * Why a journey ended (SPEC §2.1). Every terminal transition records one.
+ * Why a journey ended. Every terminal transition records one.
  *
  * <p>Log the reason, not just the coordinates: it is both recovery information and the abuse
  * signal, and without it working-as-intended behaviour is indistinguishable from a bug.
@@ -18,7 +18,7 @@ public enum TerminationReason {
     STALLED,
 
     /**
-     * Dropped by the §8 drift leash: a cluster member that ended up beyond {@code region-radius}
+     * Dropped by the drift leash: a cluster member that ended up beyond {@code region-radius}
      * of the lead. Not an arrival — the cart has genuinely got somewhere else, but it releases its
      * chunks at once rather than earning a hold, which is why it cannot be labelled ARRIVED.
      */

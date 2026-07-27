@@ -13,10 +13,10 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * SPEC §8 shutdown and cleanup paths. Release every ticket on disable, or loaded chunks leak
+ * Shutdown and cleanup paths. Release every ticket on disable, or loaded chunks leak
  * until restart.
  */
-@DisplayName("§8 lifecycle")
+@DisplayName("Lifecycle")
 class LifecycleTest extends EngineTest {
 
     @Test
@@ -53,7 +53,7 @@ class LifecycleTest extends EngineTest {
     /**
      * Swept across every reason rather than asserted for one, because a leak on any single path is
      * the failure mode that shows up only as a slowly growing loaded-chunk count on someone else's
-     * server. ARRIVED is excluded because it holds first, by design (§8).
+     * server. ARRIVED is excluded because it holds first, by design.
      */
     @ParameterizedTest(name = "{0} releases the region")
     @EnumSource(value = TerminationReason.class, names = "ARRIVED", mode = EnumSource.Mode.EXCLUDE)
@@ -107,7 +107,7 @@ class LifecycleTest extends EngineTest {
             }
             case DROPPED -> {
                 // The one reason where the terminated cart is not the journey's lead: `cart` is
-                // the member the §8 leash drops. The lead is then derailed so that a held count
+                // the member the leash drops. The lead is then derailed so that a held count
                 // of zero accounts for both regions — the cluster's and the one the drifter
                 // dragged out with it.
                 cfg.regionRadius(1);

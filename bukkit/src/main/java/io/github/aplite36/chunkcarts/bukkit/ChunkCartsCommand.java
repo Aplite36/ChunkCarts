@@ -11,7 +11,7 @@ import java.util.List;
 import java.util.Locale;
 
 /**
- * {@code /chunkcarts list|reload|debug} (SPEC §10).
+ * {@code /chunkcarts list|reload|debug}.
  *
  * <p>{@code list} matters more than it looks: it is how an admin checks that the plugin is not
  * doing anything it should not be. A cluster is one row showing its cart count, so the row count
@@ -66,9 +66,9 @@ final class ChunkCartsCommand implements CommandExecutor, TabCompleter {
     }
 
     /**
-     * Named only while the §5 clamp is actually holding the loop below the configured interval.
-     * An admin who set 10 and sees the loop running at 2 should be able to find out why here,
-     * rather than reading it as the plugin ignoring the config.
+     * Named only while the velocity clamp is actually holding the loop below the configured
+     * interval. An admin who set 10 and sees the loop running at 2 should be able to find out
+     * why here, rather than reading it as the plugin ignoring the config.
      */
     private static String clampedInterval(ChunkCartsEngine engine) {
         int effective = engine.effectivePollIntervalTicks();
@@ -78,7 +78,7 @@ final class ChunkCartsCommand implements CommandExecutor, TabCompleter {
 
     private void reload(CommandSender sender) {
         // Every ticket is released and every journey re-read from cart NBT, which is the source of
-        // truth (SPEC §7). Carts in flight carry on; they do not need a fresh token, because
+        // truth. Carts in flight carry on; they do not need a fresh token, because
         // resuming a restored journey is not a departure.
         plugin.reloadRuntime();
         sender.sendMessage("[ChunkCarts] Config reloaded. Enforcement: "

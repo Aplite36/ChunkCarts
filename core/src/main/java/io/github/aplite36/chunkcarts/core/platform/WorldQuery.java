@@ -8,15 +8,15 @@ import java.util.concurrent.CompletableFuture;
  * Read-only questions about the world. The other half of the platform surface.
  *
  * <p>Note what is <em>not</em> here: there is no {@code currentTps()}. TPS is derived in
- * {@code core} from scheduler drift (SPEC §4.2) because it is the one quantity with no good
+ * {@code core} from scheduler drift because it is the one quantity with no good
  * cross-platform answer. Adding it here would be the eighth operation across this interface
- * and {@link ChunkTicketBackend}, which SPEC §1.1 says to treat as a warning sign.
+ * and {@link ChunkTicketBackend}, and growing the platform surface is a warning sign.
  */
 public interface WorldQuery {
 
     /**
      * Whether the chunk already exists on disk. ChunkCarts refuses to generate terrain, both
-     * to avoid worldgen-bot abuse and to keep world folders from bloating (SPEC §5).
+     * to avoid worldgen-bot abuse and to keep world folders from bloating.
      */
     boolean isGenerated(WorldId world, int cx, int cz);
 
@@ -26,8 +26,8 @@ public interface WorldQuery {
      * <p><strong>This must not be implemented by asking whether the chunk is loaded.</strong>
      * A chunk ChunkCarts is holding is loaded, and is loaded at entity-ticking level, so any
      * implementation that consults chunk load state will report {@code true} for our own
-     * tickets. Tokens would then be self-granting, and every rule downstream of SPEC §3.3
-     * becomes decorative while all of it still compiles and appears to work.
+     * tickets. Tokens would then be self-granting, and every rule downstream of the token
+     * requirement becomes decorative while all of it still compiles and appears to work.
      *
      * <p>Implement it from player positions only.
      */
@@ -35,7 +35,7 @@ public interface WorldQuery {
 
     /**
      * Asks for the chunk to be brought in asynchronously, so a boundary crossing never
-     * triggers a synchronous load (SPEC §5).
+     * triggers a synchronous load.
      */
     CompletableFuture<Void> prefetch(WorldId world, int cx, int cz);
 

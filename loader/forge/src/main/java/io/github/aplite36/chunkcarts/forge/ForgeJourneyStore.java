@@ -12,7 +12,7 @@ import java.util.Base64;
 import java.util.Optional;
 
 /**
- * {@link JourneyStore} on Forge's entity persistent data (SPEC §7).
+ * {@link JourneyStore} on Forge's entity persistent data.
  *
  * <p>Forge has <em>no</em> attachment API — verified against the 1.21.11 sources, where
  * {@code net.minecraftforge.attachment} does not exist — so this is where the NeoForge port stops
@@ -25,7 +25,7 @@ import java.util.Optional;
  *   <li>Capabilities ({@code ICapabilitySerializable} plus {@code AttachCapabilitiesEvent} plus
  *       {@code RegisterCapabilitiesEvent}): roughly sixty lines and a registration event to store
  *       one byte array, and it writes a {@code ForgeCaps} tag just as unconditionally.
- *   <li>A mod-owned map keyed by UUID, which §7 rules out — state has to die with the entity and
+ *   <li>A mod-owned map keyed by UUID, which is ruled out — state has to die with the entity and
  *       roll back with the world.
  * </ul>
  *
@@ -50,7 +50,7 @@ final class ForgeJourneyStore implements JourneyStore {
         CompoundTag data = cart.getPersistentData();
         // CompoundTag's getters went Optional in 1.21.5 — measured across all eleven cached
         // targets, not assumed. On the newer branch an absent key is already an empty Optional,
-        // which is exactly the "has never travelled" answer §7 asks for.
+        // which is exactly the "has never travelled" answer needed here.
         //? if >=1.21.5 {
         return data.getString(KEY).map(Base64.getDecoder()::decode);
         //?} else {

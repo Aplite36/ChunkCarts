@@ -44,7 +44,7 @@ val unobfuscated = stonecutter.eval(mc, ">=26.1")
 
 apply(plugin = if (unobfuscated) "net.fabricmc.fabric-loom" else "net.fabricmc.fabric-loom-remap")
 
-// SPEC §1: loader subprojects target 21 for 1.21.x and 25 for 26.x, because 26.1+ requires 25.
+// Loader subprojects target 21 for 1.21.x and 25 for 26.x, because 26.1+ requires 25.
 // Confirmed against the version manifest: 1.21.11 asks for java-runtime-delta (21), 26.x for
 // java-runtime-epsilon (25).
 val javaTarget = if (unobfuscated) 25 else 21
@@ -123,7 +123,7 @@ tasks.jar {
     }
 }
 
-// chunkcarts-<version>+<mcver>-fabric.jar per SPEC §11. The shipped artifact is remapJar on an
+// chunkcarts-<version>+<mcver>-fabric.jar. The shipped artifact is remapJar on an
 // obfuscated target and plain jar on an unobfuscated one — the no-remap flavour registers no
 // remapJar at all, so naming it unconditionally fails on 26.x.
 // Typed as org.gradle.jvm.tasks.Jar, not the bundling Jar the Kotlin DSL imports by default:

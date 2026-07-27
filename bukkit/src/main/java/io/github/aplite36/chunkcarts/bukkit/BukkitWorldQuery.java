@@ -13,7 +13,7 @@ import org.bukkit.entity.Player;
 import java.util.concurrent.CompletableFuture;
 
 /**
- * The read-only half of the platform surface (SPEC §1.1).
+ * The read-only half of the platform surface.
  */
 final class BukkitWorldQuery implements WorldQuery {
 
@@ -36,13 +36,14 @@ final class BukkitWorldQuery implements WorldQuery {
     }
 
     /**
-     * <strong>Answered from player positions, never from chunk load state (SPEC §3.3).</strong>
+     * <strong>Answered from player positions, never from chunk load state.</strong>
      *
      * <p>This is the load-bearing line of the whole adapter. Chunks ChunkCarts holds are loaded,
      * and loaded at entity-ticking level, so {@code isChunkLoaded} here would report true for our
      * own tickets: carts would grant themselves tokens, the scheme would be circular, and every
-     * rule downstream of it would be decorative while still compiling and appearing to work. The
-     * §9 suite cannot catch that mistake — it runs against a fake — so the guarantee lives here.
+     * rule downstream of it would be decorative while still compiling and appearing to work.
+     * The test suite cannot catch that mistake — it runs against a fake — so the guarantee
+     * lives here.
      */
     @Override
     public boolean isPlayerLoaded(WorldId world, int cx, int cz) {
@@ -70,7 +71,7 @@ final class BukkitWorldQuery implements WorldQuery {
         if (w == null) {
             return CompletableFuture.completedFuture(null);
         }
-        // gen = false: ChunkCarts never generates terrain (SPEC §5). Paper-only, and the reason
+        // gen = false: ChunkCarts never generates terrain. Paper-only, and the reason
         // this module requires Paper — on Spigot every boundary crossing would be a synchronous
         // main-thread load instead.
         return w.getChunkAtAsync(cx, cz, false).thenApply(chunk -> null);

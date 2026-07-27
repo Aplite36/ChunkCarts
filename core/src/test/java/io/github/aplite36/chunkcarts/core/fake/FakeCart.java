@@ -61,7 +61,7 @@ public final class FakeCart implements CartView {
     }
 
     /**
-     * How many times state has been written. SPEC §7 forbids a PDC write per poll, and a flush
+     * How many times state has been written. A PDC write per poll is forbidden, and a flush
      * that is merely <em>often enough</em> to satisfy the freshness tests would pass them by
      * writing constantly — so the freshness rules need this to be pinned from the other side too.
      */

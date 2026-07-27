@@ -8,12 +8,12 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * SPEC §3.1. The loop detector, and the reason the product can make its claim at all.
+ * The loop detector, and the reason the product can make its claim at all.
  *
  * <p>Do not relax an assertion here to make it pass. A closed track that keeps loading is the
  * whole failure the project exists to prevent.
  */
-@DisplayName("§3.1 progress rule")
+@DisplayName("Progress rule")
 class ProgressRuleTest extends EngineTest {
 
     @Test

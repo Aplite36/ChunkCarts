@@ -3,7 +3,7 @@ package io.github.aplite36.chunkcarts.core;
 import java.util.UUID;
 
 /**
- * The result of evaluating the SPEC §4 departure gates.
+ * The result of evaluating the departure gates.
  *
  * <p>Sealed so that adding a third outcome is a compile error at every call site rather than a
  * silently unhandled case — the difference between departing and being denied is the difference
@@ -16,7 +16,7 @@ public sealed interface DepartureOutcome {
 
     /**
      * A gate refused. <strong>The token is untouched</strong> — a denial is not a termination
-     * (SPEC §2.1) and must leave the cart able to depart once the gate clears.
+     * and must leave the cart able to depart once the gate clears.
      */
     record Denied(DenialReason reason) implements DepartureOutcome {}
 }

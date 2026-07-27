@@ -20,7 +20,7 @@ import java.util.Optional;
 import java.util.UUID;
 
 /**
- * A live view of one minecart (SPEC §1.1). Reads through to the entity on every call rather than
+ * A live view of one minecart. Reads through to the entity on every call rather than
  * caching, because a view is created fresh each poll and a stale position is the one error that
  * would make every downstream rule wrong at once.
  */
@@ -72,11 +72,12 @@ final class BukkitCartView implements CartView {
      * vector of 1.5 while covering about 0.43 blocks a tick. The vector is the boost the rails
      * applied, before the game clamps movement to the cart's max speed — intent, not displacement.
      * Reading it raw makes an ordinary booster track look like a speed plugin, which under-reports
-     * nothing but over-reacts everywhere: §5 would halve the poll interval on a stock server for no
-     * gain, and §3.4 would call a stopped cart moving.
+     * nothing but over-reacts everywhere: the velocity clamp would halve the poll interval on a
+     * stock server for no gain, and pause tolerance would call a stopped cart moving.
      *
      * <p>{@code getMaxSpeed()} is the clamp the game itself applies, so the smaller of the two is
-     * the honest answer. Speed-modifying plugins raise it, which is exactly when §5 should fire.
+     * the honest answer. Speed-modifying plugins raise it, which is exactly when the velocity
+     * clamp should fire.
      */
     @Override
     public double velocity() {

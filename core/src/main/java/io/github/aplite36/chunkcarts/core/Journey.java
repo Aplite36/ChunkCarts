@@ -5,7 +5,7 @@ import java.util.Set;
 import java.util.UUID;
 
 /**
- * One journey's mutable state. A cluster is one journey (SPEC §8), so this is per-cluster and
+ * One journey's mutable state. A cluster is one journey, so this is per-cluster and
  * never per-cart: one origin, one budget, one region, one slot against the concurrency cap.
  *
  * <p>Package-private and deliberately a plain mutable holder. {@link JourneySnapshot} is the
@@ -19,7 +19,7 @@ final class Journey {
     /** The cart that satisfied the departure gates. It owns origin, record, slack and budget. */
     UUID lead;
 
-    /** Fixed at departure, never recomputed per poll. Only the §8 drift leash removes members. */
+    /** Fixed at departure, never recomputed per poll. Only the drift leash removes members. */
     final Set<UUID> members = new LinkedHashSet<>();
 
     JourneyState state;
@@ -34,14 +34,13 @@ final class Journey {
 
     /**
      * Epoch millis of the last chunk change. <strong>Never persisted</strong> and reset to now on
-     * restore (SPEC §7.1) — it measures standing still while we were watching, and downtime is not
-     * that.
+     * restore — it measures standing still while we were watching, and downtime is not that.
      */
     long lastProgressAt;
 
     /**
      * Epoch millis of the last write to the entity. Persisted state is the source of truth, so this
-     * bounds how stale it may get between transitions (SPEC §7) — not itself persisted.
+     * bounds how stale it may get between transitions — not itself persisted.
      */
     long lastFlushAt;
 
@@ -54,7 +53,7 @@ final class Journey {
      */
     final Set<ChunkPos> charged = new LinkedHashSet<>();
 
-    // ---- arrival hold (SPEC §8) ---------------------------------------------------------------
+    // ---- arrival hold -----------------------------------------------------------------------
 
     long holdStartedAt;
 

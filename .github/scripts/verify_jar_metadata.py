@@ -63,8 +63,8 @@ def check_common(jar: zipfile.ZipFile, platform: str, raw: str) -> None:
     names = set(jar.namelist())
 
     # core/ is shaded in rather than depended on, and a jar built without it throws
-    # NoClassDefFoundError on the first cart instead of failing to load. SPEC §1 calls the thin
-    # jar a decoy; this is the check that we never ship one.
+    # NoClassDefFoundError on the first cart instead of failing to load. A jar like that is a
+    # decoy; this is the check that we never ship one.
     check(any(n.startswith(CORE_CLASS) for n in names),
           f"no {CORE_CLASS} classes in the jar — core/ was not bundled")
 
@@ -100,7 +100,7 @@ def check_fabric(raw: str, mc: str, version: str) -> None:
     for required in ("fabricloader", "fabric-api", "minecraft"):
         check(required in depends, f"depends is missing {required!r}")
 
-    # SPEC §11 ships one jar per game version, so the Minecraft dependency is this version exactly.
+    # One jar ships per game version, so the Minecraft dependency is this version exactly.
     # A floor here would let the 1.21 jar claim to run on 26.2, where half the API it calls is gone.
     check(depends.get("minecraft") == mc,
           f"minecraft dependency is {depends.get('minecraft')!r}, expected exactly {mc!r}")
@@ -172,7 +172,7 @@ def check_bukkit(raw: str, version: str) -> None:
     check(top_level.get("version", "").strip("'\"") == version,
           f"declared version {top_level.get('version')!r} != build version {version!r}")
 
-    # SPEC §12: Folia is out of scope, and this is what makes Folia refuse the jar rather than run
+    # Folia is out of scope, and this is what makes Folia refuse the jar rather than run
     # it in a configuration nobody has tested.
     check(top_level.get("folia-supported") == "false",
           "folia-supported must be explicitly false while Folia is out of scope")

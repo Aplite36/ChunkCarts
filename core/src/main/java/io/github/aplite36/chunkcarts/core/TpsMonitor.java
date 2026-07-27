@@ -1,7 +1,7 @@
 package io.github.aplite36.chunkcarts.core;
 
 /**
- * TPS derived from scheduler drift (SPEC §4.2), not from a platform API.
+ * TPS derived from scheduler drift, not from a platform API.
  *
  * <p>The poll task is scheduled every {@code poll-interval-ticks}, so the expected wall-clock gap
  * between runs is {@code interval × 50ms}. Sampling the monotonic clock between consecutive runs

@@ -14,7 +14,7 @@ import java.util.logging.Level;
 import java.util.logging.Logger;
 
 /**
- * Holds chunks with Paper's plugin chunk tickets (SPEC §1.1).
+ * Holds chunks with Paper's plugin chunk tickets.
  *
  * <p><strong>The ticket level is the classic silent failure of this project.</strong> A chunk held
  * at border level loads but does not tick: the cart sits motionless, every unit test passes, and
@@ -85,7 +85,7 @@ final class PluginTicketBackend implements ChunkTicketBackend {
     }
 
     /**
-     * Releases everything, then sweeps (SPEC §1.1). The sweep is not redundant: whether tickets
+     * Releases everything, then sweeps. The sweep is not redundant: whether tickets
      * are dropped on disable is undocumented too, and a chunk left held leaks until the next
      * restart — a failure the server owner sees and we never do.
      */

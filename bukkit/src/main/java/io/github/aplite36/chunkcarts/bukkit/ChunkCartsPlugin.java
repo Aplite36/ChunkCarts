@@ -15,18 +15,18 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * Entry point and wiring (SPEC §12 step 4). Owns nothing policy-shaped: every rule lives in
+ * Entry point and wiring. Owns nothing policy-shaped: every rule lives in
  * {@code core}, and this class exists to hand it a clock, a world, a ticket backend and a list of
  * carts.
  *
  * <p>The runtime is rebuilt wholesale on {@code /chunkcarts reload} rather than mutated, because
  * a half-reloaded config — new clamps applied to journeys started under the old ones — is a state
  * nothing is tested against. Rebuilding releases every ticket and re-reads each journey from cart
- * NBT, which is the source of truth anyway (SPEC §7).
+ * NBT, which is the source of truth anyway.
  */
 public final class ChunkCartsPlugin extends JavaPlugin {
 
-    /** Plugins that also hold chunks for minecarts. Both cannot be right (SPEC §8). */
+    /** Plugins that also hold chunks for minecarts. Both cannot be right. */
     private static final List<String> RIVALS = List.of(
             "CartLoad", "CartLoader", "CartLoaders", "MinecartsLoadChunks",
             "ChunkEnforcer", "KeepChunks");
@@ -92,7 +92,7 @@ public final class ChunkCartsPlugin extends JavaPlugin {
         return debug;
     }
 
-    /** Tears the runtime down and builds it again from the file on disk (SPEC §10). */
+    /** Tears the runtime down and builds it again from the file on disk. */
     void reloadRuntime() {
         stop();
         reloadConfig();
@@ -129,12 +129,12 @@ public final class ChunkCartsPlugin extends JavaPlugin {
     }
 
     /**
-     * One cycle of the travel loop, plus the §5 velocity clamp the engine asked for.
+     * One cycle of the travel loop, plus the velocity clamp the engine asked for.
      *
      * <p>The interval is read after the cycle, not before: departures happen at the end of a cycle,
      * and a cart fast enough to need a shorter interval usually announces itself by departing. The
      * engine is the only thing that may choose this number, because the same number is what its TPS
-     * monitor expects the gap between polls to be (SPEC §4.2).
+     * monitor expects the gap between polls to be.
      */
     private void runTravelLoop() {
         tracker.poll();
@@ -157,7 +157,7 @@ public final class ChunkCartsPlugin extends JavaPlugin {
         }
         if (engine != null) {
             // Releases every ticket and sweeps for anything we lost track of. Without this, held
-            // chunks leak until the next restart (SPEC §8).
+            // chunks leak until the next restart.
             engine.shutdown();
         }
     }
@@ -174,7 +174,7 @@ public final class ChunkCartsPlugin extends JavaPlugin {
 
     /**
      * Converts Bukkit's configuration tree into the plain nested map {@code core} reads, so the
-     * schema lives in one tested place rather than once per platform (SPEC §6).
+     * schema lives in one tested place rather than once per platform.
      */
     private static Map<String, Object> toMap(ConfigurationSection section) {
         Map<String, Object> out = new LinkedHashMap<>();

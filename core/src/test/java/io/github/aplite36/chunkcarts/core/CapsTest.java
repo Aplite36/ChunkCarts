@@ -7,8 +7,8 @@ import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-/** SPEC §4 gate 9. Deny, do not queue. */
-@DisplayName("§4 concurrency cap")
+/** The concurrency cap gate. Deny, do not queue. */
+@DisplayName("Concurrency cap")
 class CapsTest extends EngineTest {
 
     @Test
