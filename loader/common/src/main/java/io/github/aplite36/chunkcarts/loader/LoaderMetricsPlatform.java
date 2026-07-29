@@ -2,6 +2,7 @@ package io.github.aplite36.chunkcarts.loader;
 
 import io.github.aplite36.chunkcarts.core.ChunkCartsEngine;
 import io.github.aplite36.chunkcarts.metrics.MetricsPlatform;
+import io.github.aplite36.chunkcarts.metrics.ReportingSwitch;
 import net.minecraft.server.MinecraftServer;
 import org.slf4j.Logger;
 
@@ -24,6 +25,7 @@ public final class LoaderMetricsPlatform implements MetricsPlatform {
     private final String serverSoftware;
     private final String modVersion;
     private final Logger logger;
+    private final ReportingSwitch reporting = new ReportingSwitch();
 
     /**
      * @param engine a supplier rather than the engine itself, because {@code /chunkcarts reload}
@@ -75,11 +77,19 @@ public final class LoaderMetricsPlatform implements MetricsPlatform {
         return running == null ? "unknown" : running.config().departureRequirement().name();
     }
 
-    /** The {@code metrics} key as it stands right now, so {@code /chunkcarts reload} takes effect. */
+    /**
+     * The {@code metrics} key as it stands right now, so {@code /chunkcarts reload} takes effect.
+     *
+     * <p>The engine is null for the moment a reload spends between teardown and rebuild. That is not
+     * an opt-out, and reporting it as one would shut the reporter down for good — see
+     * {@link ReportingSwitch}.
+     */
     @Override
     public boolean reportingWanted() {
         ChunkCartsEngine running = engine.get();
-        return running != null && running.config().metrics();
+        return running == null
+                ? reporting.lastKnown()
+                : reporting.observe(running.config().metrics());
     }
 
     /**

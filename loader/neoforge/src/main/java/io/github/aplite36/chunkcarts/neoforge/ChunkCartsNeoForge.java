@@ -85,7 +85,9 @@ public final class ChunkCartsNeoForge implements ChunkCartsMod {
             "chunkenforcer", "keepchunks");
 
     private MinecraftServer server;
-    private ChunkCartsEngine engine;
+    // Volatile: written on the server thread, read on the bStats daemon thread when the
+    // reporter polls whether reporting is still wanted.
+    private volatile ChunkCartsEngine engine;
     private CartTracker tracker;
     private LevelTicketBackend tickets;
     private TickScheduler scheduler;

@@ -35,7 +35,9 @@ public final class ChunkCartsPlugin extends JavaPlugin {
     private static final String TRAVEL_LOOP = "chunkcarts-travel-loop";
 
     private NamespacedKey stateKey;
-    private ChunkCartsEngine engine;
+    // Volatile: written on the server thread, read on the bStats daemon thread when the
+    // reporter polls whether reporting is still wanted.
+    private volatile ChunkCartsEngine engine;
     private CartTracker tracker;
     private PluginTicketBackend tickets;
     private BukkitTaskScheduler scheduler;

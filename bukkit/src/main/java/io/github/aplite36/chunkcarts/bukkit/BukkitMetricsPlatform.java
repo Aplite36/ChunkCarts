@@ -3,6 +3,7 @@ package io.github.aplite36.chunkcarts.bukkit;
 import io.github.aplite36.chunkcarts.core.ChunkCartsEngine;
 import io.github.aplite36.chunkcarts.metrics.BStatsSettings;
 import io.github.aplite36.chunkcarts.metrics.MetricsPlatform;
+import io.github.aplite36.chunkcarts.metrics.ReportingSwitch;
 import org.bukkit.Bukkit;
 import org.bukkit.configuration.file.YamlConfiguration;
 
@@ -22,6 +23,7 @@ import java.util.logging.Level;
 final class BukkitMetricsPlatform implements MetricsPlatform {
 
     private final ChunkCartsPlugin plugin;
+    private final ReportingSwitch reporting = new ReportingSwitch();
 
     BukkitMetricsPlatform(ChunkCartsPlugin plugin) {
         this.plugin = plugin;
@@ -104,13 +106,21 @@ final class BukkitMetricsPlatform implements MetricsPlatform {
     /**
      * The {@code metrics} key as it stands right now, so {@code /chunkcarts reload} takes effect.
      *
-     * <p>The engine is null for the moment a reload spends between teardown and rebuild, and the
-     * disabled check keeps a submit landing after {@code onDisable} from touching the scheduler.
+     * <p>Two different kinds of "no" meet here and only one of them is real. A disabled plugin is a
+     * genuine stop, and returning false shuts the reporter down, which is what should happen. A null
+     * engine is the moment a reload spends between teardown and rebuild — nobody has opted out of
+     * anything, so the last known answer stands. See {@link ReportingSwitch} for why the difference
+     * is unrecoverable rather than cosmetic.
      */
     @Override
     public boolean reportingWanted() {
+        if (!plugin.isEnabled()) {
+            return false;
+        }
         ChunkCartsEngine engine = plugin.engine();
-        return plugin.isEnabled() && engine != null && engine.config().metrics();
+        return engine == null
+                ? reporting.lastKnown()
+                : reporting.observe(engine.config().metrics());
     }
 
     @Override
