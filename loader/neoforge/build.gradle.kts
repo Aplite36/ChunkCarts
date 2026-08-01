@@ -8,6 +8,7 @@ plugins {
 }
 
 val mc = stonecutter.current.version
+val neoforgeVersion = property("neoforge_version").toString()
 
 val snakeyamlVersion = "2.6"
 
@@ -68,7 +69,6 @@ dependencies {
 
 tasks.processResources {
     val modVersion = project.version.toString()
-    val neoforgeVersion = property("neoforge_version").toString()
     inputs.property("version", modVersion)
     inputs.property("mc", mc)
     inputs.property("neo", neoforgeVersion)
