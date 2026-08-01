@@ -359,13 +359,30 @@ public final class ChunkCartsEngine {
         if (journeyId != null) {
             Journey journey = journeys.get(journeyId);
             if (journey != null) {
-                releaseAll(journey);
-                for (UUID member : journey.members) {
-                    journeyByCart.remove(member);
+                boolean isLead = cartId.equals(journey.lead);
+                boolean otherMembersRemain = journey.members.size() > 1;
+                if (!isLead && otherMembersRemain) {
+                    // A follower being destroyed is not the cluster arriving anywhere; the lead is
+                    // still out there and still owns the journey. Drop just this member, the same
+                    // way dropDrifters does for a cart that wanders off — but skip flushDormant,
+                    // because unlike a drifter this cart has no entity left to write state to.
+                    // Its chunks are not hand-released either: they simply stop being desired, and
+                    // the next syncRegion lets them go along with everything else the cluster no
+                    // longer needs.
+                    journey.members.remove(cartId);
+                    journeyByCart.remove(cartId);
+                    lastTermination.put(cartId, TerminationReason.DROPPED);
+                } else {
+                    releaseAll(journey);
+                    for (UUID member : journey.members) {
+                        journeyByCart.remove(member);
+                    }
+                    journeys.remove(journey.id);
+                    journeyByCart.remove(cartId);
                 }
-                journeys.remove(journey.id);
+            } else {
+                journeyByCart.remove(cartId);
             }
-            journeyByCart.remove(cartId);
         }
         carts.remove(cartId);
     }

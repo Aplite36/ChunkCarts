@@ -50,6 +50,62 @@ class LifecycleTest extends EngineTest {
         assertNoJourney(cart);
     }
 
+    @Test
+    @DisplayName("removing a non-lead cluster member does not end the cluster's journey")
+    void removingNonLeadMemberDoesNotEndJourney() {
+        // The bug this pins down: destroying one follower (broken by a player, blown up) used to
+        // release the whole cluster's region and drop the journey out from under the still-alive
+        // lead, leaving its persisted state stuck at TRAVELLING with nothing protecting it.
+        cfg.regionRadius(1);
+        FakeCart lead = FakeCart.at(OVERWORLD, 0, 0).atBlock(8, 8);
+        FakeCart follower = new FakeCart(OVERWORLD).atBlock(9, 8);
+        grantToken(lead);
+        assertDeparted(engine().tryDepart(lead, List.of(lead, follower)));
+        for (int i = 0; i < 3; i++) {
+            lead.atChunk(lead.chunkX() + 1, lead.chunkZ());
+            follower.atBlock(lead.x() - 1, lead.z());
+            tickPoll(lead, follower);
+        }
+
+        assertTrue(tickets.heldCount() > 0);
+
+        engine().onCartRemoved(follower.id());
+
+        assertEquals(1, journeyOf(lead).cartCount(), "lead's journey survives the follower's removal");
+        assertEquals(JourneyState.TRAVELLING, journeyOf(lead).state());
+        assertTrue(tickets.heldCount() > 0, "the lead's chunks must still be held");
+        assertTrue(engine().journeyOf(lead.id()).isPresent());
+
+        // The next poll should square the region up now that the follower is gone, releasing
+        // whatever it was uniquely holding without touching the lead's still-desired chunks.
+        int beforeNextPoll = tickets.heldCount();
+        tickPoll(lead);
+        assertTrue(tickets.heldCount() <= beforeNextPoll);
+        assertEquals(JourneyState.TRAVELLING, journeyOf(lead).state());
+    }
+
+    @Test
+    @DisplayName("removing the lead cart still ends the cluster's journey")
+    void removingLeadEndsJourney() {
+        cfg.regionRadius(1);
+        FakeCart lead = FakeCart.at(OVERWORLD, 0, 0).atBlock(8, 8);
+        FakeCart follower = new FakeCart(OVERWORLD).atBlock(9, 8);
+        grantToken(lead);
+        assertDeparted(engine().tryDepart(lead, List.of(lead, follower)));
+        for (int i = 0; i < 3; i++) {
+            lead.atChunk(lead.chunkX() + 1, lead.chunkZ());
+            follower.atBlock(lead.x() - 1, lead.z());
+            tickPoll(lead, follower);
+        }
+
+        assertTrue(tickets.heldCount() > 0);
+
+        engine().onCartRemoved(lead.id());
+
+        assertEquals(0, tickets.heldCount(), "removing the lead ends the journey and releases everything");
+        assertNoJourney(follower);
+    }
+
     /**
      * Swept across every reason rather than asserted for one, because a leak on any single path is
      * the failure mode that shows up only as a slowly growing loaded-chunk count on someone else's
