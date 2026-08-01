@@ -107,11 +107,15 @@ public final class ConfigReader {
         Set<CartType> allowed = EnumSet.noneOf(CartType.class);
         // Absent means off: an admin who lists three types and omits furnace meant three types.
         // The defaults only apply when the whole section is missing, which is the case above.
+        // Use the disabled-consequence wording here, not "using the default instead": a present
+        // section means absent = off (see above), so a malformed value in this section is never
+        // defaulted — it is switched off, and the warning must say so or an admin debugging a
+        // missing cart type will be told the opposite of what actually happened.
         CART_TYPE_KEYS.forEach((type, key) -> r.bool(key, on -> {
             if (on) {
                 allowed.add(type);
             }
-        }));
+        }, "the cart type is disabled"));
         builder.allowedCartTypes(allowed);
         warnUnknown(section, CART_TYPE_KEYS.values(), CART_TYPES, warnings);
     }
@@ -228,6 +232,15 @@ public final class ConfigReader {
         }
 
         void bool(String key, Consumer<Boolean> sink) {
+            bool(key, sink, "using the default instead");
+        }
+
+        /**
+         * Same acceptance rules as {@link #bool(String, Consumer)}, but for callers where a bad
+         * value does not fall back to a default — {@code consequence} names what actually
+         * happens instead (e.g. "the cart type is disabled"), without the trailing period.
+         */
+        void bool(String key, Consumer<Boolean> sink, String consequence) {
             Object raw = map.get(key);
             if (raw == null) {
                 return;
@@ -238,7 +251,7 @@ public final class ConfigReader {
             if (raw instanceof Boolean b) {
                 sink.accept(b);
             } else {
-                warn(key, "true or false");
+                warnings.add(path + key + " must be true or false; " + consequence + ".");
             }
         }
 

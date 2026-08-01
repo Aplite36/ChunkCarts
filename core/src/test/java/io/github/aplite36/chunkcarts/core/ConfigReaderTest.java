@@ -99,6 +99,18 @@ class ConfigReaderTest {
     }
 
     @Test
+    @DisplayName("a malformed cart-types value disables the type and says so, not 'using the default'")
+    void malformedCartTypeValueIsDisabledNotDefaulted() {
+        ConfigReader.Result result = ConfigReader.read(map("cart-types", map(
+                "hopper", "true")));
+        Config config = result.builder().build();
+
+        assertFalse(config.allowedCartTypes().contains(CartType.HOPPER));
+        assertTrue(result.warnings().contains(
+                "cart-types.hopper must be true or false; the cart type is disabled."));
+    }
+
+    @Test
     @DisplayName("tnt and command_block set to true are refused, not obeyed")
     void forbiddenCartTypesAreRefused() {
         // The file is allowed to say this; the plugin is not allowed to believe it. Gate 2 checks
