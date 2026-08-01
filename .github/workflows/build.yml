@@ -212,19 +212,33 @@ jobs:
   smoke:
     name: smoke ${{ matrix.loader }}
     runs-on: ubuntu-latest
-    needs: [plan, loader]
+    needs: [plan, bukkit, loader]
     # Runs even when part of the matrix is red. `needs` on a matrix normally means "all forty-five
     # succeeded", which would let one broken exotic target suppress the only evidence in the whole
-    # workflow that the mod loads — exactly when you most want to know. This job depends on three
-    # 1.21.11 jars, and if those three are missing download-artifact says so plainly.
+    # workflow that the mod loads — exactly when you most want to know. This job depends on four
+    # jars — three from the 1.21.11 loader matrix plus the one Bukkit jar — and if those four are
+    # missing download-artifact says so plainly.
     if: ${{ !cancelled() }}
     strategy:
       fail-fast: false
       matrix:
-        loader: [fabric, neoforge, forge]
+        # Bukkit's artifact does not fit the chunkcarts-<loader>-<mc> name the loader jars get: it
+        # is one jar for every game version (see the `bukkit` job above), so it is uploaded as
+        # plain `chunkcarts-bukkit` rather than `chunkcarts-bukkit-1.21.11`. Spelled out here per
+        # entry instead of reconstructed from `loader`, so this matrix does not silently drift from
+        # whatever the upload steps actually name things.
+        include:
+          - loader: fabric
+            artifact: chunkcarts-fabric-1.21.11
+          - loader: neoforge
+            artifact: chunkcarts-neoforge-1.21.11
+          - loader: forge
+            artifact: chunkcarts-forge-1.21.11
+          - loader: bukkit
+            artifact: chunkcarts-bukkit
     env:
       # 1.21.11 sits above every API seam on all three loaders at once, which is why the local
-      # test servers are all on it too. One version, three loaders: this job answers "does the mod
+      # test servers are all on it too. One version, four loaders: this job answers "does the mod
       # load and start", not "does it load on every version".
       SMOKE_MC: "1.21.11"
     steps:
@@ -237,7 +251,7 @@ jobs:
 
       - uses: actions/download-artifact@v4
         with:
-          name: chunkcarts-${{ matrix.loader }}-1.21.11
+          name: ${{ matrix.artifact }}
           path: jar/
 
       # Installs a real server, boots it with the jar the matrix just built, and fails unless

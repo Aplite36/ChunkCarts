@@ -9,14 +9,14 @@
 # cleanly, and was rejected by FML at boot on every one of them. The only way to know a mod loads is
 # to load it.
 #
-#   .github/scripts/smoke_test.sh <fabric|neoforge|forge> <mc-version> <dir-containing-the-jar>
+#   .github/scripts/smoke_test.sh <fabric|neoforge|forge|bukkit> <mc-version> <dir-containing-the-jar>
 #
-# Deliberately narrow: one game version, three loaders, "did it start". It is not a functional test
+# Deliberately narrow: one game version, four loaders, "did it start". It is not a functional test
 # of journeys — that is the suite in core/ and the in-game runs recorded per loader. Widening this
 # into a gameplay test would mean a headless client, and it would rot.
 set -euo pipefail
 
-LOADER="${1:?loader: fabric | neoforge | forge}"
+LOADER="${1:?loader: fabric | neoforge | forge | bukkit}"
 MC="${2:?minecraft version}"
 JAR_DIR="${3:?directory containing the built jar}"
 
@@ -27,10 +27,16 @@ FABRIC_INSTALLER="1.1.1"
 FABRIC_API="0.141.5+1.21.11"
 NEOFORGE="21.11.44"
 FORGE="1.21.11-61.1.11"
+# Paper build for 1.21.11, from https://fill.papermc.io/v3/projects/paper/versions/1.21.11/builds
+# (the v2 API at api.papermc.io is deprecated and returns HTTP 410). Checksum pinned alongside it
+# so a compromised or reshuffled build cannot swap the jar out from under the version number.
+PAPER_BUILD="132"
+PAPER_SHA256="5ffef465eeeb5f2a3c23a24419d97c51afd7dbb4923ff42df9a3f58bba1ccfba"
 
-# The adapter's last statement in start(MinecraftServer), identical on all three loaders. The em
-# dash is U+2014 and is not matched here — the pattern stops before it so an encoding difference in
-# the runner's console cannot fail the build for the wrong reason.
+# The adapter's last statement in start(MinecraftServer), identical on fabric/neoforge/forge and
+# — modulo Bukkit's own "[ChunkCarts] " log prefix, which the pattern is unanchored against — on
+# Bukkit too. The em dash is U+2014 and is not matched here — the pattern stops before it so an
+# encoding difference in the runner's console cannot fail the build for the wrong reason.
 MARKER='ChunkCarts .* enabled'
 
 # Generous on purpose. Local boots take five or six seconds, but those are warm directories with an
@@ -79,6 +85,34 @@ else:
     LAUNCH=(java -Xmx2G -jar fabric-server-launch.jar --nogui)
 }
 
+install_paper() {
+    # The fill API returns builds newest-first as a JSON array, keyed by MC version rather than by
+    # build number, so the pinned build has to be found in the list rather than addressed directly.
+    local url
+    url=$(curl -fsSL "https://fill.papermc.io/v3/projects/paper/versions/$MC/builds" \
+        | python3 -c '
+import json, sys
+builds = json.load(sys.stdin)
+wanted = int(sys.argv[1])
+for build in builds:
+    if build["id"] == wanted:
+        print(build["downloads"]["server:default"]["url"]); break
+else:
+    sys.exit(f"paper build {wanted} not published for {sys.argv[2]}")
+' "$PAPER_BUILD" "$MC")
+
+    curl -fsSL -o "$SERVER/paper.jar" "$url"
+    # Checked against the constant above, not against whatever checksum the API happened to hand
+    # back alongside the URL — the point of pinning is a value that lives in this file, not one
+    # that travels with the download it is meant to be checking.
+    echo "$PAPER_SHA256  $SERVER/paper.jar" | sha256sum -c - \
+        || { echo "paper.jar for build $PAPER_BUILD does not match the pinned PAPER_SHA256" >&2; exit 1; }
+
+    # No installer: the server jar downloaded above is the whole server. No unix_args.txt either —
+    # that is a Forge-family artifact of the installer step this loader does not have.
+    LAUNCH=(java -Xmx2G -jar paper.jar --nogui)
+}
+
 install_forge_family() {
     local url args_dir
     if [ "$LOADER" = "neoforge" ]; then
@@ -124,9 +158,15 @@ PROPERTIES
 }
 
 install_mod() {
-    mkdir -p "$SERVER/mods"
-    cp "$(jar_path)" "$SERVER/mods/"
-    ls -l "$SERVER/mods/"
+    # Bukkit is a plugin, not a mod: it loads from plugins/, and a jar dropped in mods/ would just
+    # sit there unloaded and the test would pass for the wrong reason — a server that booted with
+    # no ChunkCarts in it at all.
+    local subdir="mods"
+    [ "$LOADER" = "bukkit" ] && subdir="plugins"
+
+    mkdir -p "$SERVER/$subdir"
+    cp "$(jar_path)" "$SERVER/$subdir/"
+    ls -l "$SERVER/$subdir/"
 }
 
 run_server() {
@@ -195,6 +235,7 @@ configure_server
 case "$LOADER" in
     fabric)          install_fabric ;;
     neoforge|forge)  install_forge_family ;;
+    bukkit)          install_paper ;;
     *)               echo "unknown loader: $LOADER" >&2; exit 1 ;;
 esac
 install_mod
