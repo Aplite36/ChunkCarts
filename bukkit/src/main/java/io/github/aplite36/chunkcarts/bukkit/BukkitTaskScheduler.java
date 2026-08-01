@@ -37,12 +37,17 @@ final class BukkitTaskScheduler implements Scheduler {
      */
     @Override
     public void repeating(String name, int intervalTicks, Runnable task) {
+        // Bukkit treats a period <= 0 as non-repeating (0 gets silently rewritten to 1, but a
+        // negative period runs the task once and never again) — a config value that reaches here
+        // unclamped would strand every cart with nothing in the log. core clamps this too, but the
+        // guard belongs here as well, matching TickScheduler on the loader side.
+        int clamped = Math.max(1, intervalTicks);
         Entry existing = tasks.remove(name);
         if (existing != null) {
             existing.task().cancel();
         }
         tasks.put(name, new Entry(plugin.getServer().getScheduler()
-                .runTaskTimer(plugin, task, intervalTicks, intervalTicks), task, intervalTicks));
+                .runTaskTimer(plugin, task, clamped, clamped), task, clamped));
     }
 
     /** The interval a named task is currently running at, or 0 if there is no such task. */
@@ -57,11 +62,12 @@ final class BukkitTaskScheduler implements Scheduler {
      * interval away, so the gap the engine measures next is the one it just asked for.
      */
     void reschedule(String name, int intervalTicks) {
+        int clamped = Math.max(1, intervalTicks);
         Entry entry = tasks.get(name);
-        if (entry == null || entry.intervalTicks() == intervalTicks) {
+        if (entry == null || entry.intervalTicks() == clamped) {
             return;
         }
-        repeating(name, intervalTicks, entry.body());
+        repeating(name, clamped, entry.body());
     }
 
     void cancelAll() {

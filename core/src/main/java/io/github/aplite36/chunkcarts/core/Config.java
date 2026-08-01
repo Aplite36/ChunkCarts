@@ -49,6 +49,15 @@ public record Config(
     public static final double STRICT_MIN_SPEED_FLOOR = 0.01;
     public static final Duration STRICT_MIN_COOLDOWN_UNDER_NONE = Duration.ofSeconds(60);
 
+    // ---- Absolute bounds. Unlike the STRICT tables above, these hold in every mode: they are not
+    // a policy choice PERMISSIVE can opt out of, they are the difference between a working plugin
+    // and a broken one. A poll interval below 1 is not "more permissive", it is a scheduler period
+    // Bukkit's runTaskTimer treats as non-repeating, which silently kills the whole travel loop. A
+    // negative region radius is not "more permissive" either, it is an empty region, so a cart would
+    // travel holding nothing.
+    public static final int MIN_POLL_INTERVAL_TICKS = 1;
+    public static final int MIN_REGION_RADIUS = 0;
+
     /** Cart types that can never be enabled, whatever the config says. */
     public static final Set<CartType> NEVER_PERMITTED =
             Set.of(CartType.TNT, CartType.COMMAND_BLOCK, CartType.SPAWNER);
@@ -76,6 +85,19 @@ public record Config(
             warnings.add("cart-types: tnt, command_block and spawner cannot be enabled; ignoring.");
         }
         out.allowedCartTypes(permitted);
+
+        // ---- Absolute floors, both modes --------------------------------------------------
+        // Must run before the PERMISSIVE early return below: these are not STRICT policy, they are
+        // structural sanity bounds a broken config value cannot be permitted to violate whatever
+        // enforcement mode is in effect.
+        if (pollIntervalTicks < MIN_POLL_INTERVAL_TICKS) {
+            warnings.add(raised("poll-interval-ticks", pollIntervalTicks, MIN_POLL_INTERVAL_TICKS));
+            out.pollIntervalTicks(MIN_POLL_INTERVAL_TICKS);
+        }
+        if (regionRadius < MIN_REGION_RADIUS) {
+            warnings.add(raised("region-radius", regionRadius, MIN_REGION_RADIUS));
+            out.regionRadius(MIN_REGION_RADIUS);
+        }
 
         if (enforcement == EnforcementMode.PERMISSIVE) {
             warnings.add("ChunkCarts is in PERMISSIVE mode — minecarts CAN be used as chunk "
