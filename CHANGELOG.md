@@ -5,6 +5,37 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+
+- Two carts on separate journeys no longer strand one another where their routes run close
+  together. Wherever their held areas overlapped, the first cart to move on released a chunk the
+  second was still relying on, and the second never took it back — so it could roll into unloaded
+  terrain and stop, with nothing in the log to explain it. A chunk is now held for as long as any
+  journey still needs it, and only released once the last one has moved on.
+- A negative `poll-interval-ticks` no longer disables the travel loop outright on Paper. The value
+  reached the scheduler unchecked, which reads a negative period as "run once and never again", so
+  the plugin started cleanly, reported nothing wrong, and then did nothing at all while every cart
+  stranded. `poll-interval-ticks` and `region-radius` now have a floor, applied in both enforcement
+  modes: a travel loop that never runs is not a permission an admin can grant themselves.
+- Breaking one cart out of a travelling group no longer ends the journey for the rest of it.
+  Removing any member released the whole cluster's chunks and forgot the journey, leaving the lead
+  cart still on the rails with nothing held for it and a saved record that still claimed it was
+  travelling. A follower is now dropped on its own, exactly as one that drifts out of the group
+  already was; only losing the lead ends the journey.
+- The unload hold no longer ends in the same moment it sees a cart's contents still draining. The
+  completion check was made before the poll's own observation was recorded, so a first decrease
+  arriving on the boundary of the quiet period was measured against a timer that still pointed at
+  the start of the hold. Requires permissive enforcement, where the unload hold applies at all.
+- NeoForge jars now declare the minimum NeoForge version they were built against, instead of
+  accepting any version ever released. Installing a jar on an older loader is refused with a clear
+  message rather than loading and then failing on a missing method with nothing to say why. The
+  release checks now assert this, so it cannot quietly return.
+- A `cart-types` entry that is not `true` or `false` is now reported as disabling that cart type,
+  which is what actually happens. The warning previously said the default was used, telling an
+  admin the opposite of what became of the cart type they were trying to debug.
+
 ## [0.1.0] - 2026-07-27
 
 ### Added
