@@ -79,6 +79,16 @@ public final class ChunkCartsEngine {
     private final Map<UUID, TerminationReason> lastTermination = new HashMap<>();
 
     /**
+     * How many journeys currently want each chunk held. Two journeys' regions can overlap —
+     * region-radius is per-cart, not per-journey, and nothing stops two carts on separate tracks
+     * from passing within a few chunks of each other. Without a count, the first journey to stop
+     * wanting a shared chunk would release the platform ticket outright while the second journey's
+     * own {@code held} set still contained it, so it would never re-hold it and its cart would
+     * strand in unloaded terrain.
+     */
+    private final Map<ChunkPos, Integer> holdCounts = new HashMap<>();
+
+    /**
      * Whether any player is online, for {@code departure-requirement: PLAYER_ONLINE}. Pushed in by
      * the adapter rather than pulled: the platform surface is capped at seven operations and
      * warns against growing it, and a join/quit event is something every platform already has.
@@ -338,7 +348,7 @@ public final class ChunkCartsEngine {
         for (ChunkPos chunk : regionAround(cart)) {
             journey.charged.add(chunk);
             if (journey.held.add(chunk)) {
-                tickets.hold(chunk.world(), chunk.cx(), chunk.cz());
+                holdChunk(chunk);
             }
         }
     }
@@ -363,6 +373,7 @@ public final class ChunkCartsEngine {
     /** Releases every ticket and flushes state. Called on disable, or chunks leak until restart. */
     public void shutdown() {
         tickets.releaseAll();
+        holdCounts.clear();
         journeys.clear();
         journeyByCart.clear();
         // The per-cart registry survives: cooldowns and interaction stamps are wall-clock and must
@@ -642,7 +653,7 @@ public final class ChunkCartsEngine {
 
         for (ChunkPos chunk : List.copyOf(journey.held)) {
             if (!desired.contains(chunk)) {
-                tickets.release(chunk.world(), chunk.cx(), chunk.cz());
+                releaseChunk(chunk);
                 journey.held.remove(chunk);
             }
         }
@@ -654,7 +665,7 @@ public final class ChunkCartsEngine {
             // cart turns; only the async timing matters. Prefetch so a boundary crossing never
             // triggers a synchronous load.
             world.prefetch(chunk.world(), chunk.cx(), chunk.cz());
-            tickets.hold(chunk.world(), chunk.cx(), chunk.cz());
+            holdChunk(chunk);
             journey.held.add(chunk);
             if (journey.charged.add(chunk) && charge) {
                 journey.budgetRemaining = Math.max(0, journey.budgetRemaining - 1);
@@ -752,9 +763,40 @@ public final class ChunkCartsEngine {
 
     private void releaseAll(Journey journey) {
         for (ChunkPos chunk : journey.held) {
-            tickets.release(chunk.world(), chunk.cx(), chunk.cz());
+            releaseChunk(chunk);
         }
         journey.held.clear();
+    }
+
+    /**
+     * Takes the platform ticket only on the 0-to-1 transition. A second journey wanting a chunk
+     * the first journey already holds must not ask the backend for it again — {@code hold} calls
+     * are not required to be idempotent against a concurrent release from elsewhere, and the count
+     * is the only thing that knows the chunk is still wanted after either journey lets go.
+     */
+    private void holdChunk(ChunkPos chunk) {
+        int count = holdCounts.getOrDefault(chunk, 0);
+        if (count == 0) {
+            tickets.hold(chunk.world(), chunk.cx(), chunk.cz());
+        }
+        holdCounts.put(chunk, count + 1);
+    }
+
+    /**
+     * Drops the platform ticket only on the 1-to-0 transition, and removes the map entry at zero
+     * so a server that runs for weeks does not accumulate one stale entry per chunk it ever held.
+     */
+    private void releaseChunk(ChunkPos chunk) {
+        Integer count = holdCounts.get(chunk);
+        if (count == null) {
+            return;
+        }
+        if (count <= 1) {
+            holdCounts.remove(chunk);
+            tickets.release(chunk.world(), chunk.cx(), chunk.cz());
+        } else {
+            holdCounts.put(chunk, count - 1);
+        }
     }
 
     /** Drops the journey from the index and returns its carts to DORMANT. */
