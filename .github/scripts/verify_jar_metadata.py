@@ -154,6 +154,15 @@ def check_forge_family(raw: str, platform: str, mc: str, version: str) -> None:
             # Pinned, for the same reason as on Fabric.
             check(block.get("versionRange") == f"[{mc}]",
                   f"minecraft versionRange is {block.get('versionRange')!r}, expected '[{mc}]'")
+        if block.get("modId") == loader_id:
+            # An unbounded "[1,)" passes FML's check against any loader build ever released,
+            # including ones that predate APIs this jar calls — the mod loads clean and then
+            # crashes later with a linkage error instead of being rejected up front. A real floor
+            # is what makes that FML check mean anything.
+            version_range = block.get("versionRange")
+            check(version_range != "[1,)",
+                  f"{loader_id} versionRange is unbounded '[1,)' — any {loader_id} version ever "
+                  f"released would pass FML's check, including ones too old for this jar")
 
 
 def check_bukkit(raw: str, version: str) -> None:

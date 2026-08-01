@@ -68,10 +68,12 @@ dependencies {
 
 tasks.processResources {
     val modVersion = project.version.toString()
+    val neoforgeVersion = property("neoforge_version").toString()
     inputs.property("version", modVersion)
     inputs.property("mc", mc)
+    inputs.property("neo", neoforgeVersion)
     filesMatching("META-INF/neoforge.mods.toml") {
-        expand("version" to modVersion, "mc" to mc)
+        expand("version" to modVersion, "mc" to mc, "neo" to neoforgeVersion)
     }
 
     // Same annotated config.yml the Bukkit module ships, copied from the repo root rather than

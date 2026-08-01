@@ -17,7 +17,7 @@ carts cannot be turned into chunk loaders.
 [[dependencies.chunkcarts]]
 modId = "neoforge"
 type = "required"
-versionRange = "[1,)"
+versionRange = "[${neo},)"
 ordering = "NONE"
 side = "SERVER"
 
