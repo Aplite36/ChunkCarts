@@ -139,6 +139,34 @@ class ArrivalHoldTest extends EngineTest {
     }
 
     @Test
+    @DisplayName("a decrease observed right at the quiet-period boundary keeps the hold alive")
+    void decreaseAtQuietPeriodBoundaryDoesNotEndHold() {
+        // unload-hold is well beyond the 10s quiet period so the shared timeout can't be what
+        // ends the hold here — only completion detection can, and that's what's under test.
+        cfg.enforcement(EnforcementMode.PERMISSIVE)
+                .arrivalHoldTicks(1)
+                .unloadHold(Duration.ofSeconds(60));
+        FakeCart cart = FakeCart.at(OVERWORLD, 0, 0).type(CartType.CHEST).itemCount(100);
+        departWithToken(cart);
+        travelStraight(cart, 2);
+        cart.velocity(0.0);
+        clock.advance(config().pauseTolerance().plusSeconds(1));
+        poll(cart);
+        assertState(cart, JourneyState.HOLDING);
+
+        // The first decrease lands exactly on the 10s quiet-period boundary from hold start. That
+        // decrease must reset the quiet timer in the very poll that observes it — not be judged
+        // against a timer that hasn't been told about it yet.
+        clock.advance(Duration.ofSeconds(10));
+        cart.itemCount(50);
+        poll(cart);
+
+        assertState(cart, JourneyState.HOLDING);
+        assertTrue(tickets.heldCount() > 0,
+                "a decrease seen this poll must keep the hold alive, not end it");
+    }
+
+    @Test
     @DisplayName("a filling hopper cart does not extend the hold — inbound items must not count")
     void hopperCartFillingDoesNotExtendHold() {
         // The exploit a movement-based test would open: park a hopper cart under a farm's output

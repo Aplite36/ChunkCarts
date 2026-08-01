@@ -720,6 +720,16 @@ public final class ChunkCartsEngine {
         long elapsed = now - journey.holdStartedAt;
 
         int total = clusterItemTotal(journey, views);
+
+        // Record this poll's observation before deciding completion: a decrease seen just now must
+        // reset the quiet timer in this same poll, not be judged against a timer that still thinks
+        // the last decrease was however long ago the hold started. Comparing total to lastItemTotal
+        // first (before overwriting it) keeps that comparison meaningful.
+        if (total < journey.lastItemTotal) {
+            journey.lastDecreaseAt = now;
+        }
+        journey.lastItemTotal = total;
+
         boolean complete;
         if (elapsed >= Math.max(settle, unload)) {
             complete = true;
@@ -732,11 +742,6 @@ public final class ChunkCartsEngine {
         } else {
             complete = false;  // settle time is unconditional, in every mode
         }
-
-        if (total < journey.lastItemTotal) {
-            journey.lastDecreaseAt = now;
-        }
-        journey.lastItemTotal = total;
 
         if (complete) {
             releaseAll(journey);
