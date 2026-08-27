@@ -1,6 +1,7 @@
 package io.github.aplite36.chunkcarts.bukkit;
 
 import io.github.aplite36.chunkcarts.core.ChunkCartsEngine;
+import io.github.aplite36.chunkcarts.core.CommandHelp;
 import io.github.aplite36.chunkcarts.core.ConfigSwap;
 import io.github.aplite36.chunkcarts.core.JourneySnapshot;
 import org.bukkit.command.Command;
@@ -12,7 +13,7 @@ import java.util.List;
 import java.util.Locale;
 
 /**
- * {@code /chunkcarts list|reload|debug}.
+ * {@code /chunkcarts list|reload|debug|help}.
  *
  * <p>{@code list} matters more than it looks: it is how an admin checks that the plugin is not
  * doing anything it should not be. A cluster is one row showing its cart count, so the row count
@@ -20,7 +21,8 @@ import java.util.Locale;
  */
 final class ChunkCartsCommand implements CommandExecutor, TabCompleter {
 
-    private static final List<String> SUBCOMMANDS = List.of("list", "reload", "debug");
+    /** Shared with the loader command and with help itself, so the three cannot disagree. */
+    private static final List<String> SUBCOMMANDS = CommandHelp.SUBCOMMANDS;
 
     private final ChunkCartsPlugin plugin;
 
@@ -36,9 +38,20 @@ final class ChunkCartsCommand implements CommandExecutor, TabCompleter {
             case "reload" -> reload(sender);
             case "debug" -> sender.sendMessage("[ChunkCarts] Verbose logging "
                     + (plugin.toggleDebug() ? "ON" : "OFF") + ".");
-            default -> sender.sendMessage("[ChunkCarts] Usage: /" + label + " <list|reload|debug>");
+            case "help" -> help(sender, label);
+            // An unrecognised word gets the full help rather than a usage string. The usage string
+            // was a second list of subcommands to forget to update, which is exactly what happened
+            // to it.
+            default -> {
+                sender.sendMessage("[ChunkCarts] Unknown subcommand '" + sub + "'.");
+                help(sender, label);
+            }
         }
         return true;
+    }
+
+    private void help(CommandSender sender, String label) {
+        CommandHelp.lines(label).forEach(line -> sender.sendMessage("[ChunkCarts] " + line));
     }
 
     private void list(CommandSender sender) {

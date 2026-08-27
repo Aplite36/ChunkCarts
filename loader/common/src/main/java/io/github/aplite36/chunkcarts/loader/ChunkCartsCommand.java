@@ -2,7 +2,9 @@ package io.github.aplite36.chunkcarts.loader;
 
 import com.mojang.brigadier.CommandDispatcher;
 import com.mojang.brigadier.builder.LiteralArgumentBuilder;
+import com.mojang.brigadier.tree.CommandNode;
 import io.github.aplite36.chunkcarts.core.ChunkCartsEngine;
+import io.github.aplite36.chunkcarts.core.CommandHelp;
 import io.github.aplite36.chunkcarts.core.ConfigSwap;
 import io.github.aplite36.chunkcarts.core.JourneySnapshot;
 import net.minecraft.commands.CommandSourceStack;
@@ -16,11 +18,14 @@ import net.minecraft.server.permissions.Permissions;
 
 import java.util.List;
 import java.util.Locale;
+import java.util.Set;
+import java.util.TreeSet;
 import java.util.function.Predicate;
 import java.util.function.Supplier;
+import java.util.stream.Collectors;
 
 /**
- * {@code /chunkcarts list|reload|debug}.
+ * {@code /chunkcarts list|reload|debug|help}.
  *
  * <p>{@code list} matters more than it looks: it is how an admin checks that the mod is not doing
  * anything it should not be. A cluster is one row showing its cart count, so the row count
@@ -62,12 +67,36 @@ public final class ChunkCartsCommand {
     }
 
     private LiteralArgumentBuilder<CommandSourceStack> build(String name) {
-        return Commands.literal(name)
+        LiteralArgumentBuilder<CommandSourceStack> root = Commands.literal(name)
                 .requires(IS_ADMIN)
                 .executes(ctx -> list(ctx.getSource()))
                 .then(Commands.literal("list").executes(ctx -> list(ctx.getSource())))
                 .then(Commands.literal("reload").executes(ctx -> reload(ctx.getSource())))
-                .then(Commands.literal("debug").executes(ctx -> debug(ctx.getSource())));
+                .then(Commands.literal("debug").executes(ctx -> debug(ctx.getSource())))
+                // Brigadier answers an unregistered word with "Unknown or incomplete command" and a
+                // caret, so unlike Paper there is no default branch to fall into. help has to be a
+                // literal like the rest.
+                .then(Commands.literal("help").executes(ctx -> help(ctx.getSource(), name)));
+
+        // The tree is written out rather than generated from CommandHelp, because a command tree
+        // is easier to read declaratively and this is the shape every other mod's looks like. The
+        // cost of writing it twice is that the two can drift, which is the whole of #30 — so they
+        // are compared here instead, and a subcommand registered without a help line (or the
+        // reverse) fails at registration rather than at whatever point someone runs help.
+        Set<String> registered = root.getArguments().stream()
+                .map(CommandNode::getName)
+                .collect(Collectors.toCollection(TreeSet::new));
+        if (!registered.equals(new TreeSet<>(CommandHelp.SUBCOMMANDS))) {
+            throw new IllegalStateException("/" + name + " registers " + registered
+                    + " but CommandHelp lists " + new TreeSet<>(CommandHelp.SUBCOMMANDS)
+                    + "; the two have to match");
+        }
+        return root;
+    }
+
+    private int help(CommandSourceStack source, String label) {
+        CommandHelp.lines(label).forEach(line -> send(source, line));
+        return 1;
     }
 
     private int debug(CommandSourceStack source) {
