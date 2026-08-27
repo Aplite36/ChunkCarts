@@ -7,15 +7,18 @@ import io.github.aplite36.chunkcarts.metrics.bstats.json.JsonObjectBuilder;
 
 import java.io.File;
 import java.io.IOException;
+import java.util.List;
+import java.util.Set;
 
 /**
  * Anonymous usage reporting to bStats, identical on all four platforms.
  *
- * <p>What is sent is decided here and nowhere else, and {@link #appendPlatformData} and
- * {@link #appendServiceData} are the whole of it. The README makes a specific promise about the
- * field set — server software, game version, player count, and the two settings — and a test asserts
- * that these two methods produce exactly those keys and no others. Adding a field means changing the
- * README and the test in the same commit, which is the point.
+ * <p>What is sent is decided here and nowhere else, in three places: {@link #appendPlatformData}
+ * and {@link #appendServiceData} produce the payload's own fields, and {@link #customCharts} adds
+ * the custom-chart values on top. The README's Metrics section promises a specific field set, and
+ * {@code ChunkCartsMetricsTest} pins all three paths against {@link #DISCLOSED_PLATFORM_FIELDS} and
+ * the custom-chart ids, so adding a field or a chart means changing the README and the test in the
+ * same commit.
  *
  * <p>Two opt-outs, both honoured. The server owner's global bStats switch lives in bStats' own
  * config file and is read into {@link BStatsSettings#enabled()}; ChunkCarts' own {@code metrics}
@@ -99,15 +102,42 @@ public final class ChunkCartsMetrics {
                 // precisely the condition it is checking for, so it stays meaningful.
                 false);
 
-        base.addCustomChart(new SimplePie("enforcement", platform::enforcement));
-        base.addCustomChart(new SimplePie("departure_requirement", platform::departureRequirement));
+        customCharts(platform).forEach(base::addCustomChart);
         return new ChunkCartsMetrics(base);
+    }
+
+    /**
+     * The custom-chart values: the third path into the payload, alongside {@link
+     * #appendPlatformData} and {@link #appendServiceData}. Built as a list rather than called
+     * straight into {@code addCustomChart} so {@code ChunkCartsMetricsTest} can pin the chart ids
+     * the same way it pins the other two paths' field names.
+     *
+     * <p>{@code platform} duplicates {@code bukkitName} rather than adding new information: bStats'
+     * own Server Software chart only recognises Bukkit-family names, so every Fabric, NeoForge and
+     * Forge server renders as "Unknown" there. This chart is ours, reads all four platforms, and is
+     * the one to look at instead.
+     */
+    static List<SimplePie> customCharts(MetricsPlatform platform) {
+        return List.of(
+                new SimplePie("enforcement", platform::enforcement),
+                new SimplePie("departure_requirement", platform::departureRequirement),
+                new SimplePie("platform", platform::serverSoftware));
     }
 
     /** Stops the submit schedule. Safe to call whether or not reporting ever started. */
     public void shutdown() {
         base.shutdown();
     }
+
+    /**
+     * The exact keys {@link #appendPlatformData} writes, matching the "Metrics" section of the
+     * README field for field. {@code ChunkCartsMetricsTest} asserts the payload against this
+     * constant instead of a copy of the list, so a field can only be added here by also adding it
+     * there and to the README.
+     */
+    static final Set<String> DISCLOSED_PLATFORM_FIELDS = Set.of(
+            "playerAmount", "onlineMode", "bukkitVersion", "bukkitName",
+            "javaVersion", "osName", "osArch", "osVersion", "coreCount");
 
     /**
      * The per-server fields, under the names the Bukkit platform uses.
@@ -117,6 +147,11 @@ public final class ChunkCartsMetrics {
      * and therefore the shape bStats' game-version chart is built to read. Sending {@code 1.21.11}
      * on its own would be truthful and might still chart correctly, but there is no way to confirm
      * that from outside bStats, and matching the established format costs nothing.
+     *
+     * <p>The rest ({@code onlineMode} through {@code coreCount}) are the ordinary bStats
+     * environment fields every plugin on the server already reports: online-mode flag, Java
+     * version, host OS name/architecture/version, and CPU core count. None of it is player data,
+     * world data, an address or a coordinate.
      */
     static void appendPlatformData(JsonObjectBuilder builder, MetricsPlatform platform) {
         builder.appendField("playerAmount", platform.playerCount());

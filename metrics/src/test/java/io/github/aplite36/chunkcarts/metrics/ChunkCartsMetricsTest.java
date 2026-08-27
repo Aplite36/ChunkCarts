@@ -1,11 +1,14 @@
 package io.github.aplite36.chunkcarts.metrics;
 
+import io.github.aplite36.chunkcarts.metrics.bstats.charts.SimplePie;
 import io.github.aplite36.chunkcarts.metrics.bstats.json.JsonObjectBuilder;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -17,11 +20,12 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 /**
  * The privacy claim, as a test.
  *
- * <p>The README promises a specific, short list of what leaves a server: software, game version,
- * player count, and the two settings. That promise is only worth anything if adding a field to the
- * payload breaks the build, so these tests pin the key set exactly rather than checking that the
- * expected keys are present. A new field means editing this test, which means editing the README in
- * the same commit.
+ * <p>The README promises a specific list of what leaves a server. That promise is only worth
+ * anything if adding a field or a chart to the payload breaks the build, so these tests pin the
+ * payload against {@link ChunkCartsMetrics#DISCLOSED_PLATFORM_FIELDS} rather than a copy of the
+ * list, and pin the custom-chart ids alongside it, covering all three paths the class doc for
+ * {@link ChunkCartsMetrics} describes. A new field or chart means editing this test, which means
+ * editing the README in the same commit.
  */
 class ChunkCartsMetricsTest {
 
@@ -58,14 +62,40 @@ class ChunkCartsMetricsTest {
         return builder.build().toString();
     }
 
+    /** Every {@link ChunkCartsMetrics#customCharts} value, keyed by chart id. */
+    private static Map<String, String> customChartValues(MetricsPlatform platform) {
+        Pattern field = Pattern.compile("\"chartId\":\"([^\"]+)\".*\"value\":\"([^\"]*)\"");
+        Map<String, String> values = new LinkedHashMap<>();
+        for (SimplePie chart : ChunkCartsMetrics.customCharts(platform)) {
+            String json = chart.getRequestJsonObject((message, error) -> { }, false).toString();
+            Matcher matcher = field.matcher(json);
+            assertTrue(matcher.find(), json);
+            values.put(matcher.group(1), matcher.group(2));
+        }
+        return values;
+    }
+
     @Test
     @DisplayName("the per-server payload contains exactly the disclosed fields")
     void platformPayloadFieldsAreExactlyTheDisclosedOnes() {
         assertEquals(
-                new LinkedHashSet<>(List.of(
-                        "playerAmount", "onlineMode", "bukkitVersion", "bukkitName",
-                        "javaVersion", "osName", "osArch", "osVersion", "coreCount")),
+                ChunkCartsMetrics.DISCLOSED_PLATFORM_FIELDS,
                 keysOf(platformJson(new FakePlatform())));
+    }
+
+    @Test
+    @DisplayName("the custom charts are exactly the disclosed ones, including the platform chart")
+    void customChartsAreExactlyTheDisclosedOnes() {
+        assertEquals(
+                Set.of("enforcement", "departure_requirement", "platform"),
+                customChartValues(new FakePlatform()).keySet());
+    }
+
+    @Test
+    @DisplayName("the platform chart reports the same server software as the disclosed field")
+    void platformChartMatchesServerSoftware() {
+        FakePlatform platform = new FakePlatform();
+        assertEquals(platform.serverSoftware(), customChartValues(platform).get("platform"));
     }
 
     @Test
