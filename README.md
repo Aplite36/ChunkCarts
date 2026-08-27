@@ -105,6 +105,30 @@ One permission, `chunkcarts.admin`, which operators have by default. `/ccarts` w
 
 ---
 
+## Termination reasons
+
+Every journey that ends logs one line: `Journey ended: <REASON> — <type> at <world> x,y,z`,
+whenever `stranded.log` is on (the default). `/chunkcarts list` shows the same reason for anything
+still stranded mid-route. Nine reasons exist, and an admin seeing one in the log needs to know
+whether it is a problem or the mod doing its job:
+
+| Reason | What it means | What to do |
+| --- | --- | --- |
+| `ARRIVED` | Cart slowed below `min-speed` and stayed there past `pause-tolerance` — a journey ending normally. | Nothing. This is success; the cart earns an arrival hold (`arrival-hold-ticks`) before its chunks release. |
+| `STALLED` | Cart was still above `min-speed` — wedged, blocked, or oscillating — when `pause-tolerance` ran out. | Check the track at the reported coordinates. |
+| `DROPPED` | A cart travelling with others fell more than `region-radius` behind the lead and was dropped from the cluster; it releases its own chunks at once rather than earning a hold. | Usually nothing. If it keeps happening, look at what is separating the cart from the rest of the train. |
+| `SLACK_EXHAUSTED` | The loop detector fired: no new distance record within `progress-slack-chunks`. | Nothing — this is the mod working as intended. See "Verify it yourself", above. If it fires on track that is not actually a loop, raise `progress-slack-chunks` a little. |
+| `BUDGET_EXHAUSTED` | The journey used up `journey-budget-chunks` — more chunks than the configured travel budget allows. | Raise `journey-budget-chunks` if your rail lines are genuinely this long. It is a backstop, not the main protection — loop detection is. |
+| `UNGENERATED_CHUNK` | The route reached terrain that has not been generated yet, and ChunkCarts refused to generate it. | Walk the route yourself once to generate the chunks ahead of time, or accept the limit. |
+| `LEFT_RAILS` | The cart derailed. | Check the track at the reported coordinates. |
+| `DIMENSION_LIMIT` | The journey already used its one allowed dimension crossing and tried to cross again. | Nothing to fix — a journey may cross dimensions once by design. Split a route with more than one portal into separate journeys. |
+| `WORLD_DISABLED` | The cart's world is excluded under the `worlds` setting (blocklist or allowlist). | Nothing, if that is what you configured. Check `config.yml`'s `worlds` section if it is not. |
+
+`ARRIVED` and `WORLD_DISABLED` only reach the log with `/chunkcarts debug` on — the other seven
+always log when `stranded.log` is on, since those are the ones worth noticing without asking.
+
+---
+
 ## Unattended unloading, and why `/forceload` is the better answer
 
 A cart arriving at an unattended station is held just long enough to settle and let a detector rail

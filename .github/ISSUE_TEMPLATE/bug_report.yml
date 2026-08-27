@@ -1,0 +1,52 @@
+name: Bug report
+description: Something is wrong that isn't a chunk-loading loop.
+title: "[bug] "
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Chunks staying loaded on a loop is its own report — use **Chunks stay loaded on a loop**
+        instead if that's what you're seeing, since it asks for different information.
+
+  - type: input
+    id: platform-version
+    attributes:
+      label: Platform, ChunkCarts version, and game version
+      placeholder: Paper, ChunkCarts 0.1.0, 1.21.11
+    validations:
+      required: true
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected instead
+    validations:
+      required: true
+
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to reproduce
+    validations:
+      required: true
+
+  - type: textarea
+    id: config
+    attributes:
+      label: config.yml, if it differs from the shipped defaults
+      render: yaml
+
+  - type: textarea
+    id: log
+    attributes:
+      label: Relevant log output
+      render: text
