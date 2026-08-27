@@ -28,8 +28,11 @@ config-version: 1
 #               chunks automatically. Cannot be used as a chunk loader.
 #               [default]
 #
-#   PERMISSIVE  All of the above is bypassed. Any moving minecart loads
-#               chunks for as long as it keeps moving.
+#   PERMISSIVE  Loop detection and the travel budget are switched off, so a
+#               cart on a closed track keeps loading chunks indefinitely.
+#               Everything else still applies. Departure tokens, the
+#               cooldown, the concurrency cap and the cart-type list are
+#               unchanged.
 #
 #               >>> In PERMISSIVE mode, minecarts CAN be used as chunk
 #               >>> loaders. A player can park a cart on a small loop of
