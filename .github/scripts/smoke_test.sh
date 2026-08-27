@@ -22,11 +22,23 @@ JAR_DIR="${3:?directory containing the built jar}"
 
 # Pinned rather than resolved-latest. A smoke test that silently changes what it runs against is a
 # smoke test that fails for reasons unrelated to the commit under test. Bump these deliberately.
+#
+# Every artifact below is pinned to an exact version, so a reshuffled or silently updated build
+# already fails to resolve instead of swapping itself in — the version string alone rules that out.
+# The checksum beside each one covers what pinning the version does not: an artifact published
+# under that exact version number that is itself compromised. Verified after each download, before
+# the two installer jars are ever executed.
 FABRIC_LOADER="0.19.3"
 FABRIC_INSTALLER="1.1.1"
+# Launcher jar for MC 1.21.11 specifically (server/jar embeds $MC in its own URL below); build.yml's
+# SMOKE_MC pins every loader to that version, so this holds for how the script is actually invoked.
+FABRIC_LAUNCHER_SHA256="ed1b811d75555bd18dfc2b15199d94559ee2aab035e3c92ee43d3c4addca819f"
 FABRIC_API="0.141.5+1.21.11"
+FABRIC_API_SHA256="2525f9b7bb5524d409404831f7af276a86f7f1e90245ae4bb7555fe088d00e0d"
 NEOFORGE="21.11.44"
+NEOFORGE_SHA256="b8ae291c1ebdf4d92e5f699e2323ec5493f10e7793452256b3682aebab3eb54f"
 FORGE="1.21.11-61.1.11"
+FORGE_SHA256="df4b5de7fa894eb416ad82c0ff2087a18de4198954dc8faefc5a3eefaa1d8c10"
 # Paper build for 1.21.11, from https://fill.papermc.io/v3/projects/paper/versions/1.21.11/builds
 # (the v2 API at api.papermc.io is deprecated and returns HTTP 410). Checksum pinned alongside it
 # so a compromised or reshuffled build cannot swap the jar out from under the version number.
@@ -64,10 +76,15 @@ install_fabric() {
     # there is no installer jar to run and no network access needed at boot beyond libraries.
     curl -fsSL -o "$SERVER/fabric-server-launch.jar" \
         "https://meta.fabricmc.net/v2/versions/loader/$MC/$FABRIC_LOADER/$FABRIC_INSTALLER/server/jar"
+    echo "$FABRIC_LAUNCHER_SHA256  $SERVER/fabric-server-launch.jar" | sha256sum -c - \
+        || { echo "fabric-server-launch.jar does not match the pinned FABRIC_LAUNCHER_SHA256" >&2; exit 1; }
 
     # Fabric API is a hard dependency (fabric.mod.json declares it), so the smoke test has to supply
     # it or the mod is rejected for a reason that has nothing to do with this commit. The download
-    # URL is resolved from Modrinth rather than guessed: the CDN path contains a hash.
+    # URL is resolved from Modrinth rather than guessed: the CDN path contains a hash. Modrinth's
+    # response carries its own sha1/sha512 alongside that URL, but checking a file against a hash
+    # quoted in the same response that named the file is the same claim twice, not a check — the
+    # value worth verifying against is the one pinned below, computed independently ahead of time.
     local url
     url=$(curl -fsSL "https://api.modrinth.com/v2/project/fabric-api/version?game_versions=%5B%22$MC%22%5D&loaders=%5B%22fabric%22%5D" \
         | python3 -c '
@@ -81,6 +98,8 @@ else:
     sys.exit(f"fabric-api {wanted} not published for this game version")
 ' "$FABRIC_API")
     curl -fsSL -o "$SERVER/mods/fabric-api.jar" --create-dirs "$url"
+    echo "$FABRIC_API_SHA256  $SERVER/mods/fabric-api.jar" | sha256sum -c - \
+        || { echo "fabric-api.jar $FABRIC_API does not match the pinned FABRIC_API_SHA256" >&2; exit 1; }
 
     LAUNCH=(java -Xmx2G -jar fabric-server-launch.jar --nogui)
 }
@@ -114,16 +133,25 @@ else:
 }
 
 install_forge_family() {
-    local url args_dir
+    local url args_dir sha256 ver
     if [ "$LOADER" = "neoforge" ]; then
-        url="https://maven.neoforged.net/releases/net/neoforged/neoforge/$NEOFORGE/neoforge-$NEOFORGE-installer.jar"
-        args_dir="libraries/net/neoforged/neoforge/$NEOFORGE"
+        ver="$NEOFORGE"
+        url="https://maven.neoforged.net/releases/net/neoforged/neoforge/$ver/neoforge-$ver-installer.jar"
+        args_dir="libraries/net/neoforged/neoforge/$ver"
+        sha256="$NEOFORGE_SHA256"
     else
-        url="https://maven.minecraftforge.net/net/minecraftforge/forge/$FORGE/forge-$FORGE-installer.jar"
-        args_dir="libraries/net/minecraftforge/forge/$FORGE"
+        ver="$FORGE"
+        url="https://maven.minecraftforge.net/net/minecraftforge/forge/$ver/forge-$ver-installer.jar"
+        args_dir="libraries/net/minecraftforge/forge/$ver"
+        sha256="$FORGE_SHA256"
     fi
 
     curl -fsSL -o "$SERVER/installer.jar" "$url"
+    # Checked before the installer is ever executed: this is the one artifact in the script that
+    # runs as code rather than sitting on disk to be loaded, so an unverified download here would
+    # be an unverified program run with the runner's own privileges.
+    echo "$sha256  $SERVER/installer.jar" | sha256sum -c - \
+        || { echo "installer.jar for $LOADER $ver does not match the pinned checksum" >&2; exit 1; }
     ( cd "$SERVER" && java -jar installer.jar --installServer ) > "$LOGS/$LOADER-install.log" 2>&1 \
         || { echo "installer failed; see $LOGS/$LOADER-install.log" >&2; tail -n 40 "$LOGS/$LOADER-install.log" >&2; exit 1; }
 
