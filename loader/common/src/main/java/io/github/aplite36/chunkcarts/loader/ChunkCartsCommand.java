@@ -3,6 +3,7 @@ package io.github.aplite36.chunkcarts.loader;
 import com.mojang.brigadier.CommandDispatcher;
 import com.mojang.brigadier.builder.LiteralArgumentBuilder;
 import io.github.aplite36.chunkcarts.core.ChunkCartsEngine;
+import io.github.aplite36.chunkcarts.core.ConfigSwap;
 import io.github.aplite36.chunkcarts.core.JourneySnapshot;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
@@ -118,9 +119,24 @@ public final class ChunkCartsCommand {
         // Every ticket is released and every journey re-read from the cart's own data, which is the
         // source of truth. Carts in flight carry on; they do not need a fresh token,
         // because resuming a restored journey is not a departure.
-        mod.reloadRuntime();
-        send(source, "Config reloaded. Enforcement: " + mod.engine().config().enforcement() + ".");
-        return 1;
+        //
+        // Reading mod.engine() unconditionally used to be an NPE on a failed reload, which left the
+        // engine null: the first reload reported the real error and every reload after it reported
+        // the NPE instead, hiding it.
+        ConfigSwap.Outcome outcome = mod.reloadRuntime();
+        ChunkCartsEngine engine = mod.engine();
+        switch (outcome) {
+            case RELOADED -> send(source, "Config reloaded. Enforcement: "
+                    + engine.config().enforcement() + ".");
+            case KEPT -> send(source, engine == null
+                    ? "Not running, so there was nothing to reload."
+                    : "Config NOT reloaded — the file on disk could not be read. Still running on "
+                            + "the settings already in force (" + engine.config().enforcement()
+                            + "). The reason is in the console.");
+            case BROKEN -> send(source, "Config read but the runtime could not be rebuilt. "
+                    + "ChunkCarts is NOT running — see the console, then restart the server.");
+        }
+        return outcome == ConfigSwap.Outcome.RELOADED ? 1 : 0;
     }
 
     private static void send(CommandSourceStack source, String message) {

@@ -1,6 +1,7 @@
 package io.github.aplite36.chunkcarts.bukkit;
 
 import io.github.aplite36.chunkcarts.core.ChunkCartsEngine;
+import io.github.aplite36.chunkcarts.core.ConfigSwap;
 import io.github.aplite36.chunkcarts.core.JourneySnapshot;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandExecutor;
@@ -42,6 +43,13 @@ final class ChunkCartsCommand implements CommandExecutor, TabCompleter {
 
     private void list(CommandSender sender) {
         ChunkCartsEngine engine = plugin.engine();
+        // Matches the loader command, which has always had this. It used not to matter here only
+        // because Bukkit's stop() never nulled the field, so a plugin left inert by a failed reload
+        // read as healthy instead of saying so.
+        if (engine == null) {
+            sender.sendMessage("[ChunkCarts] Not running.");
+            return;
+        }
         List<JourneySnapshot> journeys = engine.journeys();
         if (journeys.isEmpty()) {
             sender.sendMessage("[ChunkCarts] No active journeys. "
@@ -80,9 +88,20 @@ final class ChunkCartsCommand implements CommandExecutor, TabCompleter {
         // Every ticket is released and every journey re-read from cart NBT, which is the source of
         // truth. Carts in flight carry on; they do not need a fresh token, because
         // resuming a restored journey is not a departure.
-        plugin.reloadRuntime();
-        sender.sendMessage("[ChunkCarts] Config reloaded. Enforcement: "
-                + plugin.engine().config().enforcement() + ".");
+        ConfigSwap.Outcome outcome = plugin.reloadRuntime();
+        ChunkCartsEngine engine = plugin.engine();
+        switch (outcome) {
+            case RELOADED -> sender.sendMessage("[ChunkCarts] Config reloaded. Enforcement: "
+                    + engine.config().enforcement() + ".");
+            case KEPT -> sender.sendMessage(engine == null
+                    ? "[ChunkCarts] Not running, so there was nothing to reload."
+                    : "[ChunkCarts] Config NOT reloaded — the file on disk could not be read. Still "
+                            + "running on the settings already in force ("
+                            + engine.config().enforcement() + "). The reason is in the console.");
+            case BROKEN -> sender.sendMessage("[ChunkCarts] Config read but the runtime could not "
+                    + "be rebuilt. ChunkCarts is NOT running — see the console, then restart the "
+                    + "server.");
+        }
     }
 
     @Override

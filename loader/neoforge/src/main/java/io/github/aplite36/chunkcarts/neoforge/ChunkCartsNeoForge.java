@@ -3,7 +3,7 @@ package io.github.aplite36.chunkcarts.neoforge;
 import io.github.aplite36.chunkcarts.core.CartEvent;
 import io.github.aplite36.chunkcarts.core.ChunkCartsEngine;
 import io.github.aplite36.chunkcarts.core.Config;
-import io.github.aplite36.chunkcarts.core.ConfigReader;
+import io.github.aplite36.chunkcarts.core.ConfigSwap;
 import io.github.aplite36.chunkcarts.loader.CartTracker;
 import io.github.aplite36.chunkcarts.loader.ChunkCarts;
 import io.github.aplite36.chunkcarts.loader.ChunkCartsCommand;
@@ -193,26 +193,45 @@ public final class ChunkCartsNeoForge implements ChunkCartsMod {
         return debug;
     }
 
-    /** Tears the runtime down and builds it again from the file on disk. */
+    /**
+     * Rebuilds the runtime from the file on disk, reading it before anything is torn down.
+     *
+     * <p>{@link ConfigSwap} holds the ordering and the reasoning; all four adapters go through it so
+     * they cannot disagree about what a failed reload leaves behind.
+     */
     @Override
-    public void reloadRuntime() {
+    public ConfigSwap.Outcome reloadRuntime() {
         MinecraftServer running = server;
-        stop();
-        if (running != null) {
-            start(running);
+        if (running == null) {
+            return ConfigSwap.Outcome.KEPT;
+        }
+        ConfigSwap.Outcome outcome = ConfigSwap.swap(
+                this::readConfig,
+                this::stop,
+                prepared -> start(running, prepared),
+                (message, error) -> LOGGER.error(message, error));
+        if (outcome == ConfigSwap.Outcome.RELOADED) {
             tracker.setDebug(debug);
             tickets.setDebug(debug);
         }
+        return outcome;
+    }
+
+    /** Reads and validates the config on disk. Touches nothing that is running. */
+    private ConfigSwap.Prepared readConfig() {
+        return ConfigSwap.prepare(ConfigFile.load(LOGGER, FMLPaths.CONFIGDIR.get()));
     }
 
     private void start(MinecraftServer startedServer) {
+        start(startedServer, readConfig());
+    }
+
+    private void start(MinecraftServer startedServer, ConfigSwap.Prepared prepared) {
         server = startedServer;
 
-        ConfigReader.Result parsed =
-                ConfigReader.read(ConfigFile.load(LOGGER, FMLPaths.CONFIGDIR.get()));
-        parsed.warnings().forEach(LOGGER::warn);
+        prepared.warnings().forEach(LOGGER::warn);
 
-        Config config = parsed.builder().build();
+        Config config = prepared.config();
         worlds = new LevelWorldQuery(startedServer);
         tickets = new LevelTicketBackend(worlds, LOGGER);
         engine = new ChunkCartsEngine(config, worlds, tickets, new SystemClock());

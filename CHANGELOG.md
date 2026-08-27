@@ -9,6 +9,17 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- A failed `/chunkcarts reload` no longer leaves the mod dead. The command tore the runtime down
+  before it knew a replacement could be built, so one unreadable config file released every ticket,
+  shut the engine down and left nothing running, recoverable only by restarting the server. The
+  config is now read and validated first, and a file that cannot be used leaves the settings already
+  in force running untouched. The command says which of the three things happened instead of
+  reporting success either way — and on the mod loaders, a second reload after a failed one used to
+  answer with a NullPointerException that hid the real error.
+- `/chunkcarts list` on Paper now says "Not running." when the plugin is inert, as it always has on
+  the mod loaders. Paper kept its fields after a shutdown, so a plugin that had stopped working
+  reported no active journeys, zero chunks held and the old enforcement mode, with nothing in the
+  output to say anything was wrong.
 - An error inside the travel loop no longer takes a Fabric, NeoForge or Forge server down. Task
   bodies ran with no exception isolation, so anything the engine threw went straight through the
   adapter into the loader's tick event and became a crash report — while the same bug on Paper was
