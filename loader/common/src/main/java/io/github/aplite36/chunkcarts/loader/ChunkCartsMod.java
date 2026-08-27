@@ -2,6 +2,13 @@ package io.github.aplite36.chunkcarts.loader;
 
 import io.github.aplite36.chunkcarts.core.ChunkCartsEngine;
 import io.github.aplite36.chunkcarts.core.ConfigSwap;
+import io.github.aplite36.chunkcarts.core.WhyReport;
+import io.github.aplite36.chunkcarts.core.platform.CartView;
+import net.minecraft.server.level.ServerPlayer;
+
+import java.util.List;
+import java.util.Optional;
+import java.util.UUID;
 
 /**
  * What {@code /chunkcarts} needs from whichever loader's entry point is running.
@@ -34,6 +41,17 @@ public interface ChunkCartsMod {
      * to find out whether to sound an alarm.
      */
     boolean heldChunksAllTicking();
+
+    /**
+     * A core view of one tracked cart, for {@code /chunkcarts why}.
+     *
+     * <p>A read, so it does not widen this interface in the direction its doc warns about — it
+     * reports a decision the engine has already made and changes nothing.
+     */
+    Optional<CartView> viewOf(UUID cartId);
+
+    /** Tracked carts within {@code range} of a player, for {@code /chunkcarts why}. */
+    List<WhyReport.Candidate> cartsNear(ServerPlayer player, double range);
 
     /** Flips verbose logging and returns the new state. */
     boolean toggleDebug();

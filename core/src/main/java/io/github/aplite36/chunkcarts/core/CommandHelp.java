@@ -31,6 +31,7 @@ public final class CommandHelp {
             new Line("list", "what is travelling, what is held, and the current TPS"),
             new Line("reload", "re-read the config from disk"),
             new Line("debug", "toggle verbose logging to the console"),
+            new Line("why", "why the cart you are looking at stopped, or will not depart"),
             new Line("help", "this list"));
 
     /** Just the names, for tab completion and for whatever a platform does with an unknown word. */

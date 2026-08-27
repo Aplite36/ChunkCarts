@@ -8,10 +8,14 @@ import io.github.aplite36.chunkcarts.core.ChunkCartsEngine;
 import io.github.aplite36.chunkcarts.core.CommandHelp;
 import io.github.aplite36.chunkcarts.core.ConfigSwap;
 import io.github.aplite36.chunkcarts.core.JourneySnapshot;
+import io.github.aplite36.chunkcarts.core.WhyReport;
+import io.github.aplite36.chunkcarts.core.platform.CartView;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
 import net.minecraft.ChatFormatting;
 import net.minecraft.network.chat.Component;
+import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.phys.Vec3;
 import net.minecraft.network.chat.MutableComponent;
 //? if >=1.21.11 {
 import net.minecraft.resources.Identifier;
@@ -21,6 +25,7 @@ import net.minecraft.server.permissions.Permissions;
 
 import java.util.List;
 import java.util.Locale;
+import java.util.Optional;
 import java.util.Set;
 import java.util.TreeSet;
 import java.util.function.Predicate;
@@ -80,6 +85,7 @@ public final class ChunkCartsCommand {
                                         IntegerArgumentType.getInteger(ctx, "page")))))
                 .then(Commands.literal("reload").executes(ctx -> reload(ctx.getSource())))
                 .then(Commands.literal("debug").executes(ctx -> debug(ctx.getSource())))
+                .then(Commands.literal("why").executes(ctx -> why(ctx.getSource())))
                 // Brigadier answers an unregistered word with "Unknown or incomplete command" and a
                 // caret, so unlike Paper there is no default branch to fall into. help has to be a
                 // literal like the rest.
@@ -99,6 +105,42 @@ public final class ChunkCartsCommand {
                     + "; the two have to match");
         }
         return root;
+    }
+
+    /**
+     * {@code /chunkcarts why} — what the cart the sender is looking at is doing, or what is
+     * stopping it.
+     *
+     * <p>The platform half is here and the answer is assembled in {@code core}, so this and the
+     * Paper command cannot report differently. Console has no eyes, so it is refused rather than
+     * answered about an arbitrary cart.
+     */
+    private int why(CommandSourceStack source) {
+        ChunkCartsEngine engine = mod.engine();
+        if (engine == null) {
+            send(source, "Not running.");
+            return 0;
+        }
+        ServerPlayer player = source.getPlayer();
+        if (player == null) {
+            send(source, "Run this in game, looking at a cart — the console has nowhere to look "
+                    + "from. /chunkcarts list is the console view.");
+            return 0;
+        }
+        Vec3 eye = player.getEyePosition();
+        Vec3 look = player.getLookAngle();
+        List<WhyReport.Candidate> carts = mod.cartsNear(player, WhyReport.RANGE);
+
+        Optional<CartView> view = WhyReport
+                .target(eye.x, eye.y, eye.z, look.x, look.y, look.z, carts)
+                .flatMap(mod::viewOf);
+        if (view.isEmpty()) {
+            send(source, "No minecart within " + (int) WhyReport.RANGE + " blocks that ChunkCarts "
+                    + "is tracking.");
+            return 0;
+        }
+        WhyReport.lines(view.get(), engine).forEach(line -> send(source, line));
+        return 1;
     }
 
     private int help(CommandSourceStack source, String label) {

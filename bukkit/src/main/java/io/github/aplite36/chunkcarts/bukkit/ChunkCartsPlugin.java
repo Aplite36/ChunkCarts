@@ -3,18 +3,23 @@ package io.github.aplite36.chunkcarts.bukkit;
 import io.github.aplite36.chunkcarts.core.ChunkCartsEngine;
 import io.github.aplite36.chunkcarts.core.Config;
 import io.github.aplite36.chunkcarts.core.ConfigSwap;
+import io.github.aplite36.chunkcarts.core.WhyReport;
+import io.github.aplite36.chunkcarts.core.platform.CartView;
 import io.github.aplite36.chunkcarts.metrics.ChunkCartsMetrics;
 import org.bukkit.Chunk;
 import org.bukkit.NamespacedKey;
 import org.bukkit.World;
 import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.entity.Minecart;
+import org.bukkit.entity.Player;
 import org.bukkit.event.HandlerList;
 import org.bukkit.plugin.java.JavaPlugin;
 
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
+import java.util.UUID;
 
 /**
  * Entry point and wiring. Owns nothing policy-shaped: every rule lives in
@@ -121,6 +126,16 @@ public final class ChunkCartsPlugin extends JavaPlugin {
      * from it, because the two platforms tally different enum types and the command would
      * otherwise have to parse a string to find out whether to sound an alarm.
      */
+    /** Tracked carts within {@code range} of a player, for {@code /chunkcarts why}. */
+    List<WhyReport.Candidate> cartsNear(Player player, double range) {
+        return tracker == null ? List.of() : tracker.candidatesNear(player, range);
+    }
+
+    /** A core view of one tracked cart, for {@code /chunkcarts why}. */
+    Optional<CartView> viewOf(UUID cartId) {
+        return tracker == null ? Optional.empty() : tracker.viewOf(cartId);
+    }
+
     boolean heldChunksAllTicking() {
         return tickets == null
                 || tickets.heldLevels().keySet().stream()

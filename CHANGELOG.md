@@ -9,6 +9,14 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- `/chunkcarts why`, run in game looking at a cart: what it is doing, or what is stopping it. The
+  engine already worked out both answers and kept neither where anyone could see them. The reason a
+  journey ended reached only a console line, so a player standing next to a stranded cart could
+  learn nothing and an admin had to grep the log with a timestamp they did not have. The reason a
+  cart is being refused a departure was discarded outright unless debug logging was on — so a
+  station that had quietly stopped dispatching still gave a completely healthy-looking
+  `/chunkcarts list`, and finding out why meant flooding the console for every cart on the server
+  to diagnose one. A cooldown now says how much longer, too.
 - `/chunkcarts reload` now shows the config warnings to whoever ran it, not just to the console.
   Someone runs reload to find out what their edit did, and got back "Config reloaded. Enforcement:
   STRICT." while everything that would answer the question — each clamp naming the key, the value

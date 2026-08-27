@@ -4,6 +4,8 @@ import io.github.aplite36.chunkcarts.core.CartEvent;
 import io.github.aplite36.chunkcarts.core.ChunkCartsEngine;
 import io.github.aplite36.chunkcarts.core.Config;
 import io.github.aplite36.chunkcarts.core.ConfigSwap;
+import io.github.aplite36.chunkcarts.core.WhyReport;
+import io.github.aplite36.chunkcarts.core.platform.CartView;
 import io.github.aplite36.chunkcarts.loader.CartTracker;
 import io.github.aplite36.chunkcarts.loader.ChunkCarts;
 import io.github.aplite36.chunkcarts.loader.ChunkCartsCommand;
@@ -28,6 +30,7 @@ import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.FullChunkStatus;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.Container;
 import net.minecraft.world.InteractionResult;
 import net.minecraft.world.entity.Entity;
@@ -41,6 +44,7 @@ import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
@@ -158,6 +162,16 @@ public final class ChunkCartsFabric implements ModInitializer, ChunkCartsMod {
         return tickets.heldLevels().entrySet().stream()
                 .map(e -> e.getKey() + " x" + e.getValue())
                 .collect(Collectors.joining(", "));
+    }
+
+    @Override
+    public List<WhyReport.Candidate> cartsNear(ServerPlayer player, double range) {
+        return tracker == null ? List.of() : tracker.candidatesNear(player, range);
+    }
+
+    @Override
+    public Optional<CartView> viewOf(UUID cartId) {
+        return tracker == null ? Optional.empty() : tracker.viewOf(cartId);
     }
 
     @Override

@@ -3,7 +3,9 @@ package io.github.aplite36.chunkcarts.bukkit;
 import io.github.aplite36.chunkcarts.core.ChunkCartsEngine;
 import io.github.aplite36.chunkcarts.core.DepartureOutcome;
 import io.github.aplite36.chunkcarts.core.TerminationReason;
+import io.github.aplite36.chunkcarts.core.WhyReport;
 import io.github.aplite36.chunkcarts.core.platform.CartView;
+import org.bukkit.Location;
 import org.bukkit.NamespacedKey;
 import org.bukkit.Server;
 import org.bukkit.entity.Entity;
@@ -17,6 +19,7 @@ import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.logging.Logger;
@@ -90,6 +93,40 @@ final class CartTracker {
 
     void recordInteractor(UUID cartId, UUID player) {
         lastInteractor.put(cartId, player);
+    }
+
+    /**
+     * Tracked carts within {@code range} of a player, in that player's world, for
+     * {@code /chunkcarts why}.
+     *
+     * <p>Read off {@code tracked} rather than from the world, because the answer wanted is "carts
+     * ChunkCarts knows about" — a cart it is not tracking has nothing to report.
+     */
+    List<WhyReport.Candidate> candidatesNear(Player player, double range) {
+        List<WhyReport.Candidate> near = new ArrayList<>();
+        double limit = range * range;
+        for (Minecart cart : tracked.values()) {
+            if (!cart.isValid() || !cart.getWorld().equals(player.getWorld())) {
+                continue;
+            }
+            Location at = cart.getLocation();
+            double dx = at.getX() - player.getLocation().getX();
+            double dy = at.getY() - player.getLocation().getY();
+            double dz = at.getZ() - player.getLocation().getZ();
+            if (dx * dx + dy * dy + dz * dz <= limit) {
+                near.add(new WhyReport.Candidate(cart.getUniqueId(), at.getX(), at.getY(), at.getZ()));
+            }
+        }
+        return near;
+    }
+
+    /**
+     * A core view of a tracked cart, for {@code /chunkcarts why}. Empty for a cart the mod is not
+     * tracking, which is the honest answer — it knows nothing about one.
+     */
+    Optional<CartView> viewOf(UUID cartId) {
+        Minecart cart = tracked.get(cartId);
+        return cart == null ? Optional.empty() : Optional.of(view(cart));
     }
 
     BukkitCartView view(Minecart cart) {

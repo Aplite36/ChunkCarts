@@ -4,15 +4,21 @@ import io.github.aplite36.chunkcarts.core.ChunkCartsEngine;
 import io.github.aplite36.chunkcarts.core.CommandHelp;
 import io.github.aplite36.chunkcarts.core.ConfigSwap;
 import io.github.aplite36.chunkcarts.core.JourneySnapshot;
+import io.github.aplite36.chunkcarts.core.WhyReport;
+import io.github.aplite36.chunkcarts.core.platform.CartView;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
+import org.bukkit.Location;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandExecutor;
 import org.bukkit.command.CommandSender;
 import org.bukkit.command.TabCompleter;
+import org.bukkit.entity.Player;
+import org.bukkit.util.Vector;
 
 import java.util.List;
 import java.util.Locale;
+import java.util.Optional;
 
 /**
  * {@code /chunkcarts list|reload|debug|help}.
@@ -40,6 +46,7 @@ final class ChunkCartsCommand implements CommandExecutor, TabCompleter {
             case "reload" -> reload(sender);
             case "debug" -> sender.sendMessage("[ChunkCarts] Verbose logging "
                     + (plugin.toggleDebug() ? "ON" : "OFF") + ".");
+            case "why" -> why(sender);
             case "help" -> help(sender, label);
             // An unrecognised word gets the full help rather than a usage string. The usage string
             // was a second list of subcommands to forget to update, which is exactly what happened
@@ -50,6 +57,42 @@ final class ChunkCartsCommand implements CommandExecutor, TabCompleter {
             }
         }
         return true;
+    }
+
+    /**
+     * {@code /chunkcarts why} — what the cart the sender is looking at is doing, or what is
+     * stopping it.
+     *
+     * <p>The platform half is here and the answer is assembled in {@code core}, so this and the
+     * loader command cannot report differently. Console has no eyes, so it is refused rather than
+     * answered about an arbitrary cart.
+     */
+    private void why(CommandSender sender) {
+        ChunkCartsEngine engine = plugin.engine();
+        if (engine == null) {
+            sender.sendMessage("[ChunkCarts] Not running.");
+            return;
+        }
+        if (!(sender instanceof Player player)) {
+            sender.sendMessage("[ChunkCarts] Run this in game, looking at a cart — the console has "
+                    + "nowhere to look from. /chunkcarts list is the console view.");
+            return;
+        }
+        Location eye = player.getEyeLocation();
+        Vector look = eye.getDirection();
+        List<WhyReport.Candidate> carts = plugin.cartsNear(player, WhyReport.RANGE);
+
+        Optional<CartView> view = WhyReport
+                .target(eye.getX(), eye.getY(), eye.getZ(), look.getX(), look.getY(), look.getZ(),
+                        carts)
+                .flatMap(plugin::viewOf);
+        if (view.isEmpty()) {
+            sender.sendMessage("[ChunkCarts] No minecart within " + (int) WhyReport.RANGE
+                    + " blocks that ChunkCarts is tracking.");
+            return;
+        }
+        WhyReport.lines(view.get(), engine)
+                .forEach(line -> sender.sendMessage("[ChunkCarts] " + line));
     }
 
     /** {@code /chunkcarts list 2}. A word that is not a number is page one, not an error. */
