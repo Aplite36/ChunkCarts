@@ -129,6 +129,22 @@ def check_forge_family(raw: str, platform: str, mc: str, version: str) -> None:
     check(mods[0].get("version") == version,
           f"declared version {mods[0].get('version')!r} != build version {version!r}")
 
+    # README.md promises there is nothing to install on clients. On Forge that only holds if the
+    # file says so: `ModContainer` reads `displayTest` out of mods.toml and falls back to
+    # MATCH_VERSION when it is absent, which is the setting that asks a connecting client to have
+    # the same mod. The `side = "SERVER"` keys on the dependency blocks below are a different
+    # statement — they scope *this mod's own* dependencies, not what a client is expected to carry
+    # — so they do not cover it. Same shape of defect as the `mandatory` check further down: valid
+    # TOML, clean build, wrong behaviour at a stage no test reaches.
+    #
+    # Asserted on NeoForge too, where nothing currently reads the key. It is inert rather than
+    # rejected there, and asserting it on both keeps one rule instead of two and holds the line if
+    # NeoForge adopts the same spelling later.
+    check(mods[0].get("displayTest") == "IGNORE_SERVER_VERSION",
+          f"displayTest is {mods[0].get('displayTest')!r}, expected 'IGNORE_SERVER_VERSION' — "
+          f"a {platform} jar without it asks a connecting client to have the mod, contradicting "
+          f"the README's promise that clients do not need it")
+
     blocks = _dependency_blocks(meta)
     if not check(bool(blocks), "no [[dependencies.chunkcarts]] blocks — the loader is undeclared"):
         return

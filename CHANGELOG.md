@@ -35,6 +35,12 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - A `cart-types` entry that is not `true` or `false` is now reported as disabling that cart type,
   which is what actually happens. The warning previously said the default was used, telling an
   admin the opposite of what became of the cart type they were trying to debug.
+- Forge jars now declare the mod client-optional, so a player without ChunkCarts can join a server
+  running it. The setting was left at its default, which asks a connecting client to have the same
+  mod and marks the server incompatible in the server list when it has not — the opposite of the
+  "nothing to install on clients" the README promises. NeoForge lets a mod like this one through
+  regardless, and is declared the same way for the sake of one rule rather than two. The release
+  checks now assert the declaration on both, so it cannot quietly go missing again.
 
 ## [0.1.0] - 2026-07-27
 
