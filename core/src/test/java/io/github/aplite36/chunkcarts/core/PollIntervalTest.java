@@ -110,7 +110,7 @@ class PollIntervalTest extends EngineTest {
         FakeCart cart = fastCartInFlight(4.0);
         assertTrue(engine().effectivePollIntervalTicks() < 10, "precondition: the interval shortened");
 
-        engine().onCartRemoved(cart.id());
+        removeCart(cart);
         for (int i = 0; i < 80; i++) {
             clock.advanceTicks(engine().effectivePollIntervalTicks());
             engine().poll(List.of());
