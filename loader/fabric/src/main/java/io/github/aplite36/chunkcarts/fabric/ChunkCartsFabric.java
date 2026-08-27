@@ -26,6 +26,7 @@ import net.fabricmc.fabric.api.event.player.UseBlockCallback;
 import net.fabricmc.fabric.api.event.player.UseEntityCallback;
 import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.server.MinecraftServer;
+import net.minecraft.server.level.FullChunkStatus;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.Container;
 import net.minecraft.world.InteractionResult;
@@ -157,6 +158,13 @@ public final class ChunkCartsFabric implements ModInitializer, ChunkCartsMod {
         return tickets.heldLevels().entrySet().stream()
                 .map(e -> e.getKey() + " x" + e.getValue())
                 .collect(Collectors.joining(", "));
+    }
+
+    @Override
+    public boolean heldChunksAllTicking() {
+        return tickets == null
+                || tickets.heldLevels().keySet().stream()
+                        .allMatch(status -> status == FullChunkStatus.ENTITY_TICKING);
     }
 
     @Override

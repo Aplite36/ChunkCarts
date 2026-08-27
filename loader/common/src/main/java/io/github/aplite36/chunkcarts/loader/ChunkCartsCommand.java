@@ -1,6 +1,7 @@
 package io.github.aplite36.chunkcarts.loader;
 
 import com.mojang.brigadier.CommandDispatcher;
+import com.mojang.brigadier.arguments.IntegerArgumentType;
 import com.mojang.brigadier.builder.LiteralArgumentBuilder;
 import com.mojang.brigadier.tree.CommandNode;
 import io.github.aplite36.chunkcarts.core.ChunkCartsEngine;
@@ -9,7 +10,9 @@ import io.github.aplite36.chunkcarts.core.ConfigSwap;
 import io.github.aplite36.chunkcarts.core.JourneySnapshot;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
+import net.minecraft.ChatFormatting;
 import net.minecraft.network.chat.Component;
+import net.minecraft.network.chat.MutableComponent;
 //? if >=1.21.11 {
 import net.minecraft.resources.Identifier;
 import net.minecraft.server.permissions.Permission;
@@ -69,8 +72,12 @@ public final class ChunkCartsCommand {
     private LiteralArgumentBuilder<CommandSourceStack> build(String name) {
         LiteralArgumentBuilder<CommandSourceStack> root = Commands.literal(name)
                 .requires(IS_ADMIN)
-                .executes(ctx -> list(ctx.getSource()))
-                .then(Commands.literal("list").executes(ctx -> list(ctx.getSource())))
+                .executes(ctx -> list(ctx.getSource(), 1))
+                .then(Commands.literal("list")
+                        .executes(ctx -> list(ctx.getSource(), 1))
+                        .then(Commands.argument("page", IntegerArgumentType.integer(1))
+                                .executes(ctx -> list(ctx.getSource(),
+                                        IntegerArgumentType.getInteger(ctx, "page")))))
                 .then(Commands.literal("reload").executes(ctx -> reload(ctx.getSource())))
                 .then(Commands.literal("debug").executes(ctx -> debug(ctx.getSource())))
                 // Brigadier answers an unregistered word with "Unknown or incomplete command" and a
@@ -105,32 +112,70 @@ public final class ChunkCartsCommand {
         return 1;
     }
 
-    private int list(CommandSourceStack source) {
+    /**
+     * Rows per page. A chat window shows about ten lines, and the header is the one carrying the
+     * totals — at the STRICT cap of 64 journeys an unpaged list scrolls it away first.
+     */
+    private static final int PAGE_SIZE = 8;
+
+    private int list(CommandSourceStack source, int page) {
         ChunkCartsEngine engine = mod.engine();
         if (engine == null) {
             send(source, "Not running.");
             return 0;
         }
         List<JourneySnapshot> journeys = engine.journeys();
+        int held = mod.heldChunkCount();
+
         if (journeys.isEmpty()) {
-            send(source, "No active journeys. " + mod.heldChunkCount() + " chunks held, "
-                    + String.format(Locale.ROOT, "%.1f", engine.effectiveTps()) + " TPS"
-                    + clampedInterval(engine) + ".");
+            // The tally used to appear only while carts were moving, which is the opposite of
+            // useful: chunks held with no journey holding them is the leak shape, and it is
+            // visible precisely when the list is otherwise empty.
+            sendHeader(source, "No active journeys. " + held + " chunks held",
+                    held > 0 ? " (" + mod.heldChunkLevels() + ")" : "",
+                    ", " + tps(engine) + " TPS" + clampedInterval(engine) + ".");
             return 1;
         }
-        send(source, journeys.size() + "/" + engine.config().maxConcurrentJourneys()
-                + " journeys, " + mod.heldChunkCount() + " chunks held ("
-                + mod.heldChunkLevels() + "), "
-                + String.format(Locale.ROOT, "%.1f", engine.effectiveTps()) + " TPS"
-                + clampedInterval(engine) + ":");
-        for (JourneySnapshot journey : journeys) {
-            send(source, String.format(Locale.ROOT,
-                    "  %-10s %d cart(s)  %s from %d,%d  distance %d  slack %d  budget %d",
-                    journey.state(), journey.cartCount(), journey.origin().world().value(),
-                    journey.origin().cx(), journey.origin().cz(), journey.distanceRecord(),
-                    journey.slackUsed(), journey.budgetRemaining()));
+
+        int pages = (journeys.size() + PAGE_SIZE - 1) / PAGE_SIZE;
+        int shown = Math.min(Math.max(page, 1), pages);
+        sendHeader(source, journeys.size() + "/" + engine.config().maxConcurrentJourneys()
+                        + " journeys, " + held + " chunks held",
+                " (" + mod.heldChunkLevels() + ")",
+                ", " + tps(engine) + " TPS" + clampedInterval(engine)
+                        + (pages > 1 ? "  — page " + shown + "/" + pages : "") + ":");
+
+        int from = (shown - 1) * PAGE_SIZE;
+        for (JourneySnapshot journey : journeys.subList(from, Math.min(from + PAGE_SIZE, journeys.size()))) {
+            send(source, row(journey));
+        }
+        if (shown < pages) {
+            send(source, "  ... /chunkcarts list " + (shown + 1) + " for the next "
+                    + Math.min(PAGE_SIZE, journeys.size() - from - PAGE_SIZE) + ".");
         }
         return journeys.size();
+    }
+
+    /**
+     * One journey. {@code near} is where the cluster is now and {@code from} is where it set off —
+     * the row used to carry only the second, which can be thousands of blocks behind the cart and
+     * gives an admin no way to go and look at a journey they are worried about.
+     */
+    private static String row(JourneySnapshot journey) {
+        String near = journey.approximateChunk()
+                .map(chunk -> String.format(Locale.ROOT, "near %s %d,%d",
+                        chunk.world().value(), chunk.cx() * 16, chunk.cz() * 16))
+                .orElse("holding nothing");
+        return String.format(Locale.ROOT,
+                "  %-10s %d cart(s)  %s  from %s %d,%d  distance %d  slack %d  budget %d",
+                journey.state(), journey.cartCount(), near,
+                journey.origin().world().value(), journey.origin().cx() * 16,
+                journey.origin().cz() * 16, journey.distanceRecord(),
+                journey.slackUsed(), journey.budgetRemaining());
+    }
+
+    private static String tps(ChunkCartsEngine engine) {
+        return String.format(Locale.ROOT, "%.1f", engine.effectiveTps());
     }
 
     /**
@@ -142,6 +187,27 @@ public final class ChunkCartsCommand {
         int effective = engine.effectivePollIntervalTicks();
         return effective == engine.config().pollIntervalTicks() ? ""
                 : ", polling every " + effective + " tick(s) — clamped on cart velocity";
+    }
+
+    /**
+     * The header, with the load-level tally coloured red unless every held chunk is
+     * {@code ENTITY_TICKING}.
+     *
+     * <p>This is the one line in the command that reports something no unit test can reach: that
+     * the chunks the mod holds are actually ticking. Anything else means carts sit motionless in
+     * loaded chunks. It rendered as plain text, so the healthy case and the broken case were the
+     * same shape and nobody reading {@code (TICKING x9)} noticed it was not
+     * {@code (ENTITY_TICKING x9)}.
+     */
+    private void sendHeader(CommandSourceStack source, String before, String tally, String after) {
+        MutableComponent text = Component.literal("[ChunkCarts] " + before);
+        if (!tally.isEmpty()) {
+            text = text.append(Component.literal(tally).withStyle(mod.heldChunksAllTicking()
+                    ? ChatFormatting.WHITE
+                    : ChatFormatting.RED));
+        }
+        MutableComponent line = text.append(Component.literal(after));
+        source.sendSuccess(() -> line, false);
     }
 
     private int reload(CommandSourceStack source) {

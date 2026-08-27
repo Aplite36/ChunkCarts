@@ -18,6 +18,7 @@ import io.github.aplite36.chunkcarts.loader.SystemClock;
 import io.github.aplite36.chunkcarts.loader.TickScheduler;
 import io.github.aplite36.chunkcarts.metrics.ChunkCartsMetrics;
 import net.minecraft.server.MinecraftServer;
+import net.minecraft.server.level.FullChunkStatus;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.Container;
 import net.minecraft.world.entity.Entity;
@@ -179,6 +180,13 @@ public final class ChunkCartsNeoForge implements ChunkCartsMod {
         return tickets.heldLevels().entrySet().stream()
                 .map(e -> e.getKey() + " x" + e.getValue())
                 .collect(Collectors.joining(", "));
+    }
+
+    @Override
+    public boolean heldChunksAllTicking() {
+        return tickets == null
+                || tickets.heldLevels().keySet().stream()
+                        .allMatch(status -> status == FullChunkStatus.ENTITY_TICKING);
     }
 
     @Override
