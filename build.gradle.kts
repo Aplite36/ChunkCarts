@@ -87,8 +87,31 @@ if (distDir != null) {
     // Paper's async chunk prefetch does not exist, and the mod would stall the main thread there.
     val bukkitLoaders = listOf("paper", "purpur")
 
-    val releaseNotes = rootProject.file("CHANGELOG.md").takeIf { it.isFile }?.readText()
-        ?: "See https://github.com/Aplite36/ChunkCarts/releases/tag/v$projectVersion"
+    // gradle.properties can still say "-SNAPSHOT" here: release.yml's gate job refuses to tag-release
+    // one, but a manual rehearsal dispatch (dry run, no tag) is allowed to run with one so the
+    // pipeline can be exercised before the version is bumped. Either way, CHANGELOG.md headings name
+    // the version the release *carries*, never the SNAPSHOT suffix, so that is what gets matched —
+    // and a rehearsal is held to the same bar a real release would be, rather than skipping the check
+    // and proving nothing about whether the notes are actually ready.
+    val releaseVersion = projectVersion.removeSuffix("-SNAPSHOT")
+
+    val changelogText = rootProject.file("CHANGELOG.md").takeIf { it.isFile }?.readText()
+        ?: throw GradleException(
+            "CHANGELOG.md is missing. Add a \"## [$releaseVersion]\" section before releasing.",
+        )
+
+    // Keep a Changelog headings look like "## [0.1.0] - 2026-07-27": DOT_MATCHES_ALL lets `.` cross
+    // the date and the entries beneath, and the lookahead stops at the next "## " heading (or end of
+    // file) without consuming it. Anchoring on the literal released version, rather than reading
+    // whichever section happens to come first, is what keeps "## [Unreleased]" — real, unshipped
+    // changes — from ever being published as this release's notes.
+    val releaseNotes = Regex(
+        """^## \[${Regex.escape(releaseVersion)}].*?(?=^## |\z)""",
+        setOf(RegexOption.MULTILINE, RegexOption.DOT_MATCHES_ALL),
+    ).find(changelogText)?.value?.trim()
+        ?: throw GradleException(
+            "CHANGELOG.md has no \"## [$releaseVersion]\" section. Add one before releasing.",
+        )
 
     // 26.1 and later require Java 25; everything before it runs on 21. CurseForge wants this as
     // file metadata, and it has to agree with the per-target toolchains rather than restate them
