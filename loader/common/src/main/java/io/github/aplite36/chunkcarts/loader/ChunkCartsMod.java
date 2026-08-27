@@ -43,7 +43,8 @@ public interface ChunkCartsMod {
      *
      * <p>The config is read and validated first, so a reload that cannot produce a working
      * replacement leaves the one already running untouched. The three outcomes need three different
-     * things said to whoever ran the command, which is why this returns one rather than nothing.
+     * things said to whoever ran the command, and the warnings the reload produced are the answer
+     * to the question that made them run it — which is why this returns both rather than nothing.
      */
-    ConfigSwap.Outcome reloadRuntime();
+    ConfigSwap.Result reloadRuntime();
 }

@@ -9,6 +9,12 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- `/chunkcarts reload` now shows the config warnings to whoever ran it, not just to the console.
+  Someone runs reload to find out what their edit did, and got back "Config reloaded. Enforcement:
+  STRICT." while everything that would answer the question — each clamp naming the key, the value
+  they wrote and what it became — went to the log. It now reports the count even when it is zero,
+  because silence and success previously looked identical, and caps the list at eight lines with a
+  pointer to the console so a config full of mistyped keys cannot spew into chat.
 - `/chunkcarts list` now colours the held-chunk load level red unless every chunk is
   `ENTITY_TICKING`. That tally is the only in-game evidence for the one claim no unit test can
   reach — that the chunks the mod holds are actually ticking — and it rendered as plain text, so

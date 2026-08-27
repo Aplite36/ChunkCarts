@@ -1,10 +1,11 @@
 package io.github.aplite36.chunkcarts.core;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.function.BiConsumer;
-import java.util.function.Consumer;
+import java.util.function.Function;
 import java.util.function.Supplier;
 
 /**
@@ -27,6 +28,16 @@ public final class ConfigSwap {
 
     /** A config read from disk and validated, with whatever the reader warned about on the way. */
     public record Prepared(Config config, List<String> warnings) {}
+
+    /**
+     * What a reload did, and everything it wants said about the config it read.
+     *
+     * <p>The warnings are the point of carrying anything back at all. {@code Config.resolve()}'s
+     * own doc says "clamping must warn, or the operator never learns their setting was overruled",
+     * and every clamp names the key, the value that was written and what it became. All of that
+     * went to the console — the one place the person who just ran the command is not looking.
+     */
+    public record Result(Outcome outcome, List<String> warnings) {}
 
     /** What a reload did. The three cases need three different things said to whoever asked. */
     public enum Outcome {
@@ -73,11 +84,14 @@ public final class ConfigSwap {
      * @param read     produces a validated config, or throws. Must not touch the running runtime —
      *                 the whole point is that this can fail harmlessly
      * @param teardown stops the running runtime. Not called at all if {@code read} throws
-     * @param rebuild  builds the new runtime from what {@code read} returned
+     * @param rebuild  builds the new runtime from what {@code read} returned, and returns whatever
+     *                 else wants reporting — in practice {@code engine.startupWarnings()}, which
+     *                 does not exist until the engine has been constructed and resolved its config
      * @param onFailure given a message and the throwable behind it, for the adapter's own logger
      */
-    public static Outcome swap(Supplier<Prepared> read, Runnable teardown, Consumer<Prepared> rebuild,
-                               BiConsumer<String, Throwable> onFailure) {
+    public static Result swap(Supplier<Prepared> read, Runnable teardown,
+                              Function<Prepared, List<String>> rebuild,
+                              BiConsumer<String, Throwable> onFailure) {
         Objects.requireNonNull(read, "read");
         Objects.requireNonNull(teardown, "teardown");
         Objects.requireNonNull(rebuild, "rebuild");
@@ -89,17 +103,50 @@ public final class ConfigSwap {
         } catch (RuntimeException error) {
             onFailure.accept("Config reload failed while reading the file, so nothing was changed. "
                     + "ChunkCarts is still running on the settings it already had.", error);
-            return Outcome.KEPT;
+            return new Result(Outcome.KEPT, List.of());
         }
 
         teardown.run();
+        List<String> resolved;
         try {
-            rebuild.accept(prepared);
+            resolved = rebuild.apply(prepared);
         } catch (RuntimeException error) {
             onFailure.accept("Config reload read the file but could not rebuild the runtime. "
                     + "ChunkCarts is NOT running. Restart the server once the cause is fixed.", error);
-            return Outcome.BROKEN;
+            return new Result(Outcome.BROKEN, List.of());
         }
-        return Outcome.RELOADED;
+        List<String> warnings = new ArrayList<>(prepared.warnings());
+        warnings.addAll(resolved);
+        return new Result(Outcome.RELOADED, List.copyOf(warnings));
+    }
+
+    /**
+     * How many warning lines a command prints before deferring to the console.
+     *
+     * <p>A config with many unrecognised keys could otherwise spew into chat, and the console copy
+     * is complete either way. Eight is about what a chat window shows at once.
+     */
+    public static final int WARNINGS_SHOWN = 8;
+
+    /**
+     * The warnings, as lines for whoever ran the command, indented under a count.
+     *
+     * <p>Empty warnings produce an empty list rather than nothing to say: the caller states that
+     * on the same line as the success, because silence and success are otherwise identical and
+     * that is half of what #29 is about.
+     */
+    public static List<String> report(List<String> warnings) {
+        if (warnings.isEmpty()) {
+            return List.of();
+        }
+        List<String> lines = new ArrayList<>();
+        for (String warning : warnings.subList(0, Math.min(WARNINGS_SHOWN, warnings.size()))) {
+            lines.add("  " + warning);
+        }
+        if (warnings.size() > WARNINGS_SHOWN) {
+            lines.add("  ... and " + (warnings.size() - WARNINGS_SHOWN)
+                    + " more; the full list is in the console.");
+        }
+        return List.copyOf(lines);
     }
 }
