@@ -72,6 +72,9 @@ public final class ChunkCartsNeoForge implements ChunkCartsMod {
 
     private static final String TRAVEL_LOOP = "chunkcarts-travel-loop";
 
+    /** The ticket backend's per-tick sweep. Named so a fault in it is attributable. */
+    private static final String TICKET_SWEEP = "chunkcarts-ticket-sweep";
+
     /**
      * Mods that also hold chunks <em>for minecarts</em>. Both cannot be right.
      *
@@ -228,7 +231,7 @@ public final class ChunkCartsNeoForge implements ChunkCartsMod {
             }
         }
 
-        scheduler = new TickScheduler();
+        scheduler = new TickScheduler(LOGGER);
         scheduler.repeating(TRAVEL_LOOP, engine.effectivePollIntervalTicks(), this::runTravelLoop);
 
         startMetrics(startedServer);
@@ -313,7 +316,9 @@ public final class ChunkCartsNeoForge implements ChunkCartsMod {
         // this flag, and the player list is the thing the flag is about. Reading it once per tick
         // costs a size check and cannot drift out of step with reality the way an event pair can.
         engine.setPlayersOnline(!ticking.getPlayerList().getPlayers().isEmpty());
-        tickets.tick();
+        // Both run on the loader's tick event, where an escaping throw is a crash report rather
+        // than a logged mistake, so neither is allowed to escape. See TickLoop.
+        scheduler.guarded(TICKET_SWEEP, tickets::tick);
         scheduler.tick(ticking);
     }
 

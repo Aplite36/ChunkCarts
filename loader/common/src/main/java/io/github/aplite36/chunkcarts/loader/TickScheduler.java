@@ -1,112 +1,98 @@
 package io.github.aplite36.chunkcarts.loader;
 
 import io.github.aplite36.chunkcarts.core.platform.Scheduler;
+import io.github.aplite36.chunkcarts.core.platform.TickLoop;
 import net.minecraft.server.MinecraftServer;
 //? if >=1.21.3 {
 import net.minecraft.util.profiling.Profiler;
 //?}
 import net.minecraft.util.profiling.ProfilerFiller;
-
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
+import org.slf4j.Logger;
 
 /**
  * Schedules the travel loop by counting server ticks.
  *
- * <p>There is no scheduler in vanilla, so this is one: {@link #tick()} is driven from
- * {@code END_SERVER_TICK} and runs each task when its counter reaches its interval. That is closer
- * to the metal than Bukkit's scheduler and has one consequence worth stating — the gap between two
- * runs is exactly {@code intervalTicks} server ticks, however long those ticks took. TPS is
- * measured as expected wall-clock gap over actual, and a tick counter is precisely the "expected"
- * side of that ratio, so a lagging server shows up as a longer real gap rather than as skipped runs.
+ * <p>There is no scheduler in vanilla, so this is one. The counting, the intervals and the catch
+ * around a task body all live in {@link TickLoop} over in {@code core}, where they can be tested;
+ * what is left here is the half that needs Minecraft, which is the profiler section each task runs
+ * inside. On this platform the section name reaches {@code /debug} output and spark reports, so a
+ * server owner can see what ChunkCarts costs without instrumenting it.
  *
- * <p>Nothing here coalesces or drops a run. An adapter that quietly skipped one would be read as a
- * server running at a fraction of its speed, and the plugin's response to that is to deny
- * departures — so the honest tick count is load-bearing, not bookkeeping.
- *
- * <p>{@link #reschedule} exists for one thing only: the velocity clamp, where the engine decides
- * the loop should run more often and tells its TPS monitor the same number. Nothing in this class
- * may change an interval on its own initiative.
+ * <p>Read {@link TickLoop} for why the tick count is load-bearing rather than bookkeeping, and for
+ * why a task that throws is caught and kept rather than disabled.
  */
 public final class TickScheduler {
 
-    private final Map<String, Entry> tasks = new LinkedHashMap<>();
+    private final TickLoop loop;
 
-    private static final class Entry {
-        final String name;
-        final Runnable body;
-        int intervalTicks;
-        int countdown;
-
-        Entry(String name, Runnable body, int intervalTicks) {
-            this.name = name;
-            this.body = body;
-            this.intervalTicks = intervalTicks;
-            this.countdown = intervalTicks;
-        }
+    public TickScheduler(Logger log) {
+        this.loop = new TickLoop(new LoggedFaults(log));
     }
 
     /** The {@link Scheduler} view handed to {@code core}. */
     public Scheduler asScheduler() {
-        return this::repeating;
+        return loop;
     }
 
     public void repeating(String name, int intervalTicks, Runnable task) {
-        tasks.put(name, new Entry(name, task, Math.max(1, intervalTicks)));
+        loop.repeating(name, intervalTicks, task);
     }
 
     /** The interval a named task is currently running at, or 0 if there is no such task. */
     public int intervalOf(String name) {
-        Entry entry = tasks.get(name);
-        return entry == null ? 0 : entry.intervalTicks;
+        return loop.intervalOf(name);
     }
 
-    /**
-     * Changes a task's interval, keeping its body.
-     *
-     * <p>The countdown is clamped rather than restarted, so shortening the interval takes effect on
-     * the next due tick instead of a full old interval later. That matters because the clamp exists
-     * for a cart that is already moving too fast — waiting out the interval we just decided was too
-     * long is the one thing this must not do.
-     */
+    /** Changes a task's interval, keeping its body. For the velocity clamp and nothing else. */
     public void reschedule(String name, int intervalTicks) {
-        Entry entry = tasks.get(name);
-        if (entry == null || entry.intervalTicks == intervalTicks) {
-            return;
-        }
-        entry.intervalTicks = Math.max(1, intervalTicks);
-        entry.countdown = Math.min(entry.countdown, entry.intervalTicks);
+        loop.reschedule(name, intervalTicks);
     }
 
     public void cancelAll() {
-        tasks.clear();
+        loop.cancelAll();
     }
 
     /**
-     * One server tick. Task bodies run inside a named profiler section: on this platform the name
-     * reaches {@code /debug} output and spark reports, so a server owner can see what ChunkCarts
-     * costs without instrumenting it.
+     * Runs one body behind the same catch as a scheduled task, for work an adapter drives from its
+     * own tick handler. The ticket backend's per-tick sweep is the only caller: it runs on the same
+     * event, immediately before {@link #tick}, and a throw from it reaches the loader's tick event
+     * exactly as a throw from a task body would.
      */
+    public boolean guarded(String task, Runnable body) {
+        return loop.guarded(task, body);
+    }
+
+    /** One server tick. */
     public void tick(MinecraftServer server) {
-        // Snapshot: a task body may reschedule itself, and the velocity clamp does exactly that.
-        for (Entry entry : List.copyOf(tasks.values())) {
-            if (--entry.countdown > 0) {
-                continue;
-            }
-            entry.countdown = entry.intervalTicks;
+        loop.tick((name, body) -> {
             // The thread-local Profiler holder arrived in 1.21.3; before that the profiler is the
             // server's, which is why this takes one.
             //? if >=1.21.3 {
             ProfilerFiller profiler = Profiler.get();
             //?} else
             /*ProfilerFiller profiler = server.getProfiler();*/
-            profiler.push(entry.name);
+            profiler.push(name);
             try {
-                entry.body.run();
+                body.run();
             } finally {
                 profiler.pop();
             }
+        });
+    }
+
+    /** {@link TickLoop.Faults} over the adapter's logger. */
+    private record LoggedFaults(Logger log) implements TickLoop.Faults {
+
+        @Override
+        public void caught(String task, Throwable error, long consecutive) {
+            log.error("ChunkCarts task '{}' threw; the throw was stopped here and the server keeps "
+                    + "ticking. Consecutive failures: {}.", task, consecutive, error);
+        }
+
+        @Override
+        public void recovered(String task, long failures) {
+            log.warn("ChunkCarts task '{}' is running again after {} consecutive failure(s).",
+                    task, failures);
         }
     }
 }
