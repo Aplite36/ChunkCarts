@@ -35,6 +35,13 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - A `cart-types` entry that is not `true` or `false` is now reported as disabling that cart type,
   which is what actually happens. The warning previously said the default was used, telling an
   admin the opposite of what became of the cart type they were trying to debug.
+- ChunkCarts no longer fights other mods over SnakeYAML on Forge and NeoForge. Both jars carried
+  the library at its own package name, and both loaders put every mod in one class space, so on a
+  server where another mod bundled it the same way a single copy won for everyone. Whichever mod
+  wanted the version that lost got a missing-method crash: ours at config load, on a path that
+  takes the server down with it. The library is now relocated under the mod's own package, where
+  no other mod can reach it. The release checks now assert that, and that the references inside
+  the jar were rewritten rather than the files merely moved.
 - Forge jars now declare the mod client-optional, so a player without ChunkCarts can join a server
   running it. The setting was left at its default, which asks a connecting client to have the same
   mod and marks the server incompatible in the server list when it has not — the opposite of the

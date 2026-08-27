@@ -30,6 +30,15 @@ import zipfile
 CORE_CLASS = "io/github/aplite36/chunkcarts/core/"
 CONFIG_FILE = "config.yml"
 
+# SnakeYAML, before and after relocation. No jar may ship the library under its own name: Forge and
+# NeoForge relocate it into the second package, Fabric carries it as a Jar-in-Jar nested archive so
+# it never appears at the top level, and the Bukkit plugin gets it from the server.
+SNAKEYAML_PACKAGE = "org/yaml/snakeyaml/"
+SNAKEYAML_RELOCATED = "io/github/aplite36/chunkcarts/shaded/snakeyaml/"
+
+# The two that share a class space, and so the two that must carry the relocated copy.
+RELOCATING_PLATFORMS = ("forge", "neoforge")
+
 # The class each platform actually enters the mod through. Verified present in the jar, because a
 # metadata file naming a class that was never packaged is the other half of the same failure.
 ENTRY_CLASS = {
@@ -79,6 +88,56 @@ def check_common(jar: zipfile.ZipFile, platform: str, raw: str) -> None:
     leftover = re.findall(r"\$\{[^}]*\}", raw)
     check(not leftover,
           f"unexpanded Gradle template {sorted(set(leftover))} in {METADATA_PATH[platform]}")
+
+    check_snakeyaml(jar, platform, names)
+
+
+def check_snakeyaml(jar: zipfile.ZipFile, platform: str, names: set[str]) -> None:
+    """No jar may ship SnakeYAML under its own name, and moving the files is not enough.
+
+    Forge and NeoForge load every mod into one class space, and SnakeYAML is among the most
+    commonly bundled libraries in the ecosystem. Two mods shipping it unrelocated means one copy
+    wins for both: `ConfigFile` calls `SafeConstructor(LoaderOptions)`, which only exists from 1.32,
+    so an older winner is a NoSuchMethodError at config load — and the mod that loses can just as
+    easily be the other one. Nothing else in CI looks at the bundled library at all.
+
+    The second half is the one worth having. A relocation that renames the entries without
+    rewriting the constant pools produces a jar that builds, packages and passes a path-only check,
+    and then fails at runtime with NoClassDefFoundError — strictly worse than shipping it
+    unrelocated, because it fails every time rather than only in company.
+    """
+    # `check` takes an evaluated message, so anything indexing into the offending list has to be
+    # computed behind the same condition rather than inside the call.
+    stray = sorted(n for n in names if SNAKEYAML_PACKAGE in n)
+    if stray:
+        fail(f"SnakeYAML is in the jar under its own name ({stray[0]}, {len(stray)} entries) — on "
+             f"a shared class space that collides with any other mod bundling it unrelocated")
+
+    # The rest is about the relocation, so it is asked of the platforms that relocate. On Fabric
+    # the mod's own classes reference `org.yaml.snakeyaml` and should: Loader unpacks the nested
+    # jar and supplies the package at runtime. The Bukkit plugin gets it from the server.
+    if platform not in RELOCATING_PLATFORMS:
+        return
+
+    check(any(n.startswith(SNAKEYAML_RELOCATED) for n in names),
+          f"no {SNAKEYAML_RELOCATED} classes in the jar — the relocated SnakeYAML was not "
+          f"bundled, and ConfigFile throws NoClassDefFoundError on first config load")
+
+    # Byte-level rather than by entry name: this is the check that the references moved with the
+    # files. `org.yaml.snakeyaml` as a literal, so javac's synthetic `$SwitchMap$org$yaml$…` fields
+    # — which are field names, not class references, and are consistent within the relocated jar —
+    # do not read as a failure.
+    dangling = []
+    for name in sorted(names):
+        if not name.endswith(".class"):
+            continue
+        data = jar.read(name)
+        if SNAKEYAML_PACKAGE.encode() in data or b"org.yaml.snakeyaml" in data:
+            dangling.append(name)
+    if dangling:
+        fail(f"{len(dangling)} class files still reference org.yaml.snakeyaml, starting with "
+             f"{dangling[0]} — the relocation renamed entries without rewriting their constant "
+             f"pools, so the jar packages and then fails at runtime")
 
 
 def check_fabric(raw: str, mc: str, version: str) -> None:
