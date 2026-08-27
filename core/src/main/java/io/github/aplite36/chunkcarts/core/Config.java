@@ -42,6 +42,7 @@ public record Config(
     public static final int STRICT_MAX_REGION_RADIUS = 2;
     public static final int STRICT_MAX_CONCURRENT_JOURNEYS = 64;
     public static final Duration STRICT_MAX_PAUSE_TOLERANCE = Duration.ofSeconds(30);
+    public static final Duration STRICT_MAX_JOURNEY_COOLDOWN = Duration.ofDays(1);
     public static final int STRICT_MAX_ARRIVAL_HOLD_TICKS = 200;
     public static final int STRICT_MAX_POLL_INTERVAL_TICKS = 20;
 
@@ -53,10 +54,18 @@ public record Config(
     // a policy choice PERMISSIVE can opt out of, they are the difference between a working plugin
     // and a broken one. A poll interval below 1 is not "more permissive", it is a scheduler period
     // Bukkit's runTaskTimer treats as non-repeating, which silently kills the whole travel loop. A
-    // negative region radius is not "more permissive" either, it is an empty region, so a cart would
-    // travel holding nothing.
+    // region radius below 1 is not "more permissive" either: at 0 the held region is the cart's own
+    // chunk and nothing else, so the cart reaches the first chunk boundary and stops ticking, every
+    // train straddling a boundary is torn apart as drifted, and the velocity clamp reads the zero
+    // margin as "poll as fast as possible" and pins the travel loop to one tick. And a count of 0
+    // where a positive number is meant is not a loosened limit but a closed door: a zero budget
+    // kills every journey on its first poll, zero concurrent journeys refuses every departure on
+    // the server, and zero slack calls the first curve in the track a loop.
     public static final int MIN_POLL_INTERVAL_TICKS = 1;
-    public static final int MIN_REGION_RADIUS = 0;
+    public static final int MIN_REGION_RADIUS = 1;
+    public static final int MIN_JOURNEY_BUDGET_CHUNKS = 1;
+    public static final int MIN_PROGRESS_SLACK_CHUNKS = 1;
+    public static final int MIN_CONCURRENT_JOURNEYS = 1;
 
     /** Cart types that can never be enabled, whatever the config says. */
     public static final Set<CartType> NEVER_PERMITTED =
@@ -98,6 +107,21 @@ public record Config(
             warnings.add(raised("region-radius", regionRadius, MIN_REGION_RADIUS));
             out.regionRadius(MIN_REGION_RADIUS);
         }
+        if (journeyBudgetChunks < MIN_JOURNEY_BUDGET_CHUNKS) {
+            warnings.add(raised("journey-budget-chunks", journeyBudgetChunks,
+                    MIN_JOURNEY_BUDGET_CHUNKS));
+            out.journeyBudgetChunks(MIN_JOURNEY_BUDGET_CHUNKS);
+        }
+        if (progressSlackChunks < MIN_PROGRESS_SLACK_CHUNKS) {
+            warnings.add(raised("progress-slack-chunks", progressSlackChunks,
+                    MIN_PROGRESS_SLACK_CHUNKS));
+            out.progressSlackChunks(MIN_PROGRESS_SLACK_CHUNKS);
+        }
+        if (maxConcurrentJourneys < MIN_CONCURRENT_JOURNEYS) {
+            warnings.add(raised("max-concurrent-journeys", maxConcurrentJourneys,
+                    MIN_CONCURRENT_JOURNEYS));
+            out.maxConcurrentJourneys(MIN_CONCURRENT_JOURNEYS);
+        }
 
         if (enforcement == EnforcementMode.PERMISSIVE) {
             warnings.add("ChunkCarts is in PERMISSIVE mode — minecarts CAN be used as chunk "
@@ -133,6 +157,12 @@ public record Config(
         if (pauseTolerance.compareTo(STRICT_MAX_PAUSE_TOLERANCE) > 0) {
             warnings.add(clamped("pause-tolerance", pauseTolerance, STRICT_MAX_PAUSE_TOLERANCE));
             out.pauseTolerance(STRICT_MAX_PAUSE_TOLERANCE);
+        }
+        // A ceiling on the one duration that had none. A cooldown measured in centuries is not a
+        // rate limit anybody meant, it is a typo that retires every cart on the server for good.
+        if (journeyCooldown.compareTo(STRICT_MAX_JOURNEY_COOLDOWN) > 0) {
+            warnings.add(clamped("journey-cooldown", journeyCooldown, STRICT_MAX_JOURNEY_COOLDOWN));
+            out.journeyCooldown(STRICT_MAX_JOURNEY_COOLDOWN);
         }
         if (arrivalHoldTicks > STRICT_MAX_ARRIVAL_HOLD_TICKS) {
             warnings.add(clamped("arrival-hold-ticks", arrivalHoldTicks,
