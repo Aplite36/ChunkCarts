@@ -70,7 +70,10 @@ class TpsBackoffTest extends EngineTest {
 
         // Recover to just above min-tps but below min-tps + 1.0. Still denied, or the log fills
         // with transitions on a server hovering at the threshold.
-        pollAt(Duration.ofMillis(543), 10);
+        pollAt(Duration.ofMillis(543), 60);
+        double recovered = engine().effectiveTps();
+        assertTrue(recovered > 18.0 && recovered < 19.0,
+                "precondition: recovered into the hysteresis band, not merely closer to it");
         FakeCart second = FakeCart.at(OVERWORLD, 30, 0);
         grantToken(second);
         assertDenied(depart(second), DenialReason.TPS_BACKOFF);

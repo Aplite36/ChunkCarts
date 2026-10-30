@@ -104,10 +104,35 @@ class ArrivalHoldTest extends EngineTest {
         clock.advance(config().pauseTolerance().plusSeconds(1));
         poll(cart);
 
-        clock.advance(Duration.ofSeconds(11));
+        // Five seconds: inside the ten-second quiet period, so only the total == 0 branch can
+        // end the hold here. Eleven seconds would pass through the quiet-period branch too, and
+        // hold identically for a cart that never drains — see the next test.
+        clock.advance(Duration.ofSeconds(5));
         poll(cart);
 
         assertEquals(0, tickets.heldCount(), "nothing to drain, so nothing to wait for");
+    }
+
+    @Test
+    @DisplayName("a full cart is still held at five seconds — the quiet period alone must not release it")
+    void fullCartStaysHeldBeforeQuietPeriodElapses() {
+        cfg.enforcement(EnforcementMode.PERMISSIVE)
+                .arrivalHoldTicks(1)
+                .unloadHold(Duration.ofMinutes(5));
+        FakeCart cart = FakeCart.at(OVERWORLD, 0, 0).type(CartType.CHEST).itemCount(100);
+        departWithToken(cart);
+        travelStraight(cart, 2);
+        cart.velocity(0.0);
+        clock.advance(config().pauseTolerance().plusSeconds(1));
+        poll(cart);
+
+        // Same five seconds as the case above, but the cart never drains. Nothing has pinned the
+        // quiet-period branch against this cart before: previously the only assertion at this
+        // elapsed time also happened to pass for a cart that was empty.
+        clock.advance(Duration.ofSeconds(5));
+        poll(cart);
+
+        assertTrue(tickets.heldCount() > 0, "a full cart that never drains must still be held");
     }
 
     @Test
