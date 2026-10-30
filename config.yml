@@ -82,6 +82,9 @@ departure-requirement: PLAYER_SEEN
 # Under departure-requirement: NONE in STRICT mode, this is forced to a
 # minimum of 60s. Without a floor, a dispenser could launch carts down a
 # line continuously and keep the whole corridor loaded.
+#
+# Capped at 24h in STRICT mode, at the other end. A cooldown longer than that
+# is a typo, not a rate limit, and it retires every cart on the server.
 journey-cooldown: 10m
 
 
@@ -99,7 +102,8 @@ journey-cooldown: 10m
 # rail lines and see BUDGET_EXHAUSTED in your log, raise this.
 #
 # This is a backstop, not the main protection. Loop detection is.
-# Capped at 1024 in STRICT mode.
+# Capped at 1024 in STRICT mode, and at least 1 in every mode — a budget of 0
+# ends every journey on its first check.
 journey-budget-chunks: 256
 
 # ── THIS IS THE LOOP DETECTOR ──
@@ -116,7 +120,8 @@ journey-budget-chunks: 256
 # Lowering it kills loops faster but risks cutting off legitimate track.
 #
 # 16 chunks is about 256 blocks of loop travel — a few seconds.
-# Capped at 64 in STRICT mode.
+# Capped at 64 in STRICT mode, and at least 1 in every mode — with no slack at
+# all, the first curve in the track reads as a loop.
 progress-slack-chunks: 16
 
 
@@ -132,6 +137,10 @@ progress-slack-chunks: 16
 # 1 is enough. All eight neighbouring chunks are held, so whichever way the
 # track turns, the next chunk is already loaded. Raising this nearly triples
 # the cost per cart for no benefit at normal minecart speeds.
+#
+# 1 is also the minimum, in every mode. At 0 a cart holds its own chunk and
+# nothing else, so it stops at the first chunk boundary it reaches — there is
+# no "hold nothing" setting here, only a broken one.
 # Capped at 2 in STRICT mode.
 region-radius: 1
 
@@ -144,7 +153,9 @@ region-radius: 1
 # At region-radius 1 this default caps ChunkCarts at 144 loaded chunks. For
 # comparison, one player at simulation distance 10 loads over 400. Raise it
 # freely if you have a lot of rail and headroom.
-# Capped at 64 in STRICT mode.
+# Capped at 64 in STRICT mode, and at least 1 in every mode — 0 refuses every
+# departure on the server. To turn ChunkCarts off in a world, use the worlds
+# section below.
 max-concurrent-journeys: 16
 
 # How often (in ticks) travelling carts are checked.

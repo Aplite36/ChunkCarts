@@ -1,8 +1,10 @@
 package io.github.aplite36.chunkcarts.core;
 
+import java.math.BigInteger;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.EnumSet;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
@@ -59,9 +61,10 @@ public final class ConfigReader {
     public record Result(Config.Builder builder, List<String> warnings) {}
 
     public static Result read(Map<String, Object> yaml) {
+        Map<String, Object> root = stringKeys(yaml);
         Config.Builder builder = Config.defaults();
         List<String> warnings = new ArrayList<>();
-        Reader r = new Reader(yaml, warnings);
+        Reader r = new Reader(root, warnings);
 
         r.integer("config-version", version -> {
             if (version > SCHEMA_VERSION) {
@@ -89,13 +92,31 @@ public final class ConfigReader {
         readWorlds(r.section(WORLDS), warnings, builder);
         readStranded(r.section(STRANDED), warnings, builder);
 
-        for (String key : yaml.keySet()) {
+        for (String key : root.keySet()) {
             if (!KNOWN.contains(key)) {
                 warnings.add("Unrecognised config key '" + key + "'; ignoring. Check the spelling "
                         + "against config.yml — a setting that does nothing is worse than an error.");
             }
         }
         return new Result(builder, List.copyOf(warnings));
+    }
+
+    /**
+     * Re-keys a parsed map by {@link String#valueOf} so the rest of this class can rely on its
+     * own {@code Map<String, Object>} typing.
+     *
+     * <p>Nothing upstream enforces that a YAML key is a string, and the YAML 1.1 resolver every
+     * real parser uses turns a bare {@code on}, {@code off}, {@code yes}, {@code no}, {@code y}
+     * or {@code n} key into a {@code Boolean} and a numeric key into an {@code Integer} or
+     * {@code Long}. Iterating those as {@code String} is a {@code ClassCastException} out of
+     * {@code read} — a whole plugin lost to one mistyped key, which is exactly what this class
+     * exists to prevent. Re-keying costs one pass and turns that key back into what it looks
+     * like in the file, so it comes out as an "unrecognised key" warning like any other typo.
+     */
+    private static Map<String, Object> stringKeys(Map<?, ?> raw) {
+        Map<String, Object> out = new LinkedHashMap<>();
+        raw.forEach((key, value) -> out.put(String.valueOf(key), value));
+        return out;
     }
 
     private static void readCartTypes(Map<String, Object> section, List<String> warnings,
@@ -184,14 +205,27 @@ public final class ConfigReader {
         if (amount < 0) {
             throw new IllegalArgumentException("negative duration: '" + text + "'");
         }
-        return switch (unit) {
-            case 'h' -> Duration.ofHours(amount);
-            case 'm' -> Duration.ofMinutes(amount);
-            case 's' -> Duration.ofSeconds(amount);
-            default -> Character.isDigit(unit)
-                    ? Duration.ofSeconds(amount)   // a bare number means seconds
-                    : throwUnit(text, unit);
-        };
+        Duration duration;
+        try {
+            duration = switch (unit) {
+                case 'h' -> Duration.ofHours(amount);
+                case 'm' -> Duration.ofMinutes(amount);
+                case 's' -> Duration.ofSeconds(amount);
+                default -> Character.isDigit(unit)
+                        ? Duration.ofSeconds(amount)   // a bare number means seconds
+                        : throwUnit(text, unit);
+            };
+            // Bounding the low end is not enough. Duration.ofHours succeeds well past what
+            // toMillis() can represent, and every setting parsed here is read through toMillis()
+            // at use — journey-cooldown from inside gate(), on every departure attempt. An
+            // ArithmeticException there is not a bad value, it is a mod that never departs a cart
+            // again, so the overflow has to surface here where it can still fall back to the
+            // default. Long.MAX_VALUE hours overflows in ofHours itself, hence the wider try.
+            duration.toMillis();
+        } catch (ArithmeticException e) {
+            throw new IllegalArgumentException("duration too large: '" + text + "'", e);
+        }
+        return duration;
     }
 
     private static Duration throwUnit(String text, char unit) {
@@ -212,7 +246,31 @@ public final class ConfigReader {
         }
 
         void integer(String key, Consumer<Integer> sink) {
-            number(key, "a whole number", n -> sink.accept(n.intValue()));
+            number(key, "a whole number", n -> {
+                if (fitsInInt(n)) {
+                    sink.accept(n.intValue());
+                } else {
+                    warnings.add(path + key + " is " + n + ", outside the range of a whole number ("
+                            + Integer.MIN_VALUE + " to " + Integer.MAX_VALUE
+                            + "); using the default instead.");
+                }
+            });
+        }
+
+        /**
+         * Whether narrowing to {@code int} would change the value.
+         *
+         * <p>A YAML integer too large for an int arrives as a {@code Long} (or a
+         * {@link BigInteger}), and {@code Number.intValue()} wraps rather than failing, so
+         * {@code journey-budget-chunks: 3000000000} would otherwise be applied as a negative
+         * budget: no warning, and every journey dead on its first poll.
+         */
+        private static boolean fitsInInt(Number n) {
+            if (n instanceof BigInteger big) {
+                return big.bitLength() < Integer.SIZE;   // longValue() wraps for these too
+            }
+            long value = n.longValue();
+            return value >= Integer.MIN_VALUE && value <= Integer.MAX_VALUE;
         }
 
         void decimal(String key, Consumer<Double> sink) {
@@ -279,14 +337,13 @@ public final class ConfigReader {
             }
         }
 
-        @SuppressWarnings("unchecked")
         Map<String, Object> section(String key) {
             Object raw = map.get(key);
             if (raw == null) {
                 return null;
             }
             if (raw instanceof Map<?, ?> m) {
-                return (Map<String, Object>) m;
+                return stringKeys(m);   // a nested section can have non-string keys too
             }
             warn(key, "a section");
             return null;

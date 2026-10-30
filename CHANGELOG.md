@@ -82,6 +82,24 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - A `cart-types` entry that is not `true` or `false` is now reported as disabling that cart type,
   which is what actually happens. The warning previously said the default was used, telling an
   admin the opposite of what became of the cart type they were trying to debug.
+- A whole number too large to be one is now a warning instead of a silently different setting.
+  `journey-budget-chunks: 3000000000` was applied as `-1294967296`, so every journey died on its
+  first check with nothing in the log connecting the two. Out-of-range values now fall back to the
+  default and say so, and `journey-budget-chunks`, `progress-slack-chunks` and
+  `max-concurrent-journeys` have a floor of 1 in both enforcement modes.
+- A config key that YAML reads as something other than text no longer stops the plugin loading. A
+  bare `on`, `off`, `yes`, `no`, `y` or `n` key, or a numeric one, is a boolean or a number to
+  every YAML parser, and the reader threw on it instead of warning — on the mod loaders, during
+  server startup, which took the server down with it. Such a key is now reported as unrecognised,
+  like any other typo.
+- A duration too large to be measured in milliseconds is now refused at load. `journey-cooldown:
+  999999999999999h` parsed cleanly and then threw on every departure attempt, forever, so no cart
+  ever set off. It now falls back to the default with a warning, and `journey-cooldown` is capped
+  at 24h in STRICT mode alongside the other durations.
+- `region-radius: 0` is no longer accepted. It held the cart's own chunk and nothing else, so the
+  cart stopped at the first chunk boundary; it tore apart any group of carts straddling one; and
+  it pinned the travel loop to a check every tick while `/chunkcarts list` blamed cart speed. The
+  minimum is now 1, in both enforcement modes, and a lower value is raised with a warning.
 
 ## [0.1.0] - 2026-07-27
 
