@@ -21,7 +21,7 @@ import java.util.Locale;
 import java.util.Optional;
 
 /**
- * {@code /chunkcarts list|reload|debug|help}.
+ * {@code /chunkcarts list|reload|debug|why|help}.
  *
  * <p>{@code list} matters more than it looks: it is how an admin checks that the plugin is not
  * doing anything it should not be. A cluster is one row showing its cart count, so the row count

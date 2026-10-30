@@ -1,11 +1,11 @@
 name: Build
 
 # Nothing is published from a local machine, so CI has to be the thing that builds every jar. Two
-# scopes, because building all forty-five loader targets takes long enough that doing it on
+# scopes, because building all forty-eight loader targets takes long enough that doing it on
 # every push to a branch would make the feedback useless:
 #
 #   pull request      -> core, bukkit, and one loader target per branch point in the source (~20)
-#   push to main      -> core, bukkit, and all forty-five loader targets
+#   push to main      -> core, bukkit, and all forty-eight loader targets
 #   manual dispatch   -> whichever you ask for
 #
 # The subset is defined, with a reason per entry, in .github/scripts/build_matrix.py. Read the
@@ -152,7 +152,7 @@ jobs:
     runs-on: ubuntu-latest
     needs: plan
     strategy:
-      # One target failing tells you nothing about the other forty-four, and the whole point of
+      # One target failing tells you nothing about the other forty-seven, and the whole point of
       # the matrix is to learn which ones break.
       fail-fast: false
       matrix: ${{ fromJSON(needs.plan.outputs.matrix) }}
@@ -218,7 +218,7 @@ jobs:
     name: smoke ${{ matrix.loader }}
     runs-on: ubuntu-latest
     needs: [plan, bukkit, loader]
-    # Runs even when part of the matrix is red. `needs` on a matrix normally means "all forty-five
+    # Runs even when part of the matrix is red. `needs` on a matrix normally means "all forty-eight
     # succeeded", which would let one broken exotic target suppress the only evidence in the whole
     # workflow that the mod loads — exactly when you most want to know. This job depends on four
     # jars — three from the 1.21.11 loader matrix plus the one Bukkit jar — and if those four are
@@ -274,7 +274,7 @@ jobs:
           path: smoke/logs/
 
   # A single required check to point branch protection at, so the rule does not have to name
-  # forty-five jobs that change with the matrix.
+  # forty-eight jobs that change with the matrix.
   build-ok:
     name: Build OK
     runs-on: ubuntu-latest

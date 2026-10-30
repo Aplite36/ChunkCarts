@@ -33,7 +33,7 @@ import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
 /**
- * {@code /chunkcarts list|reload|debug|help}.
+ * {@code /chunkcarts list|reload|debug|why|help}.
  *
  * <p>{@code list} matters more than it looks: it is how an admin checks that the mod is not doing
  * anything it should not be. A cluster is one row showing its cart count, so the row count

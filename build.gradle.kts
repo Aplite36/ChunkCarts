@@ -14,7 +14,7 @@ tasks.wrapper {
 // Publishing
 //
 // Publishing reads jars out of a directory, not out of this build's outputs. That is deliberate.
-// The forty-six jars are built by forty-six separate CI jobs on forty-six separate machines and
+// The forty-nine jars are built by forty-nine separate CI jobs on forty-nine separate machines and
 // collected by release.yml; there is no single machine that has built them all, and there should
 // not be. Reading the directory means the artifact uploaded is byte-for-byte the one the metadata
 // verifier checked and the smoke test booted.
@@ -220,10 +220,10 @@ if (distDir != null) {
         // the live `game/versions` endpoint, not assumed — with no paper, bukkit or spigot tag at
         // all, because CurseForge files Bukkit plugins under a separate project class. Adding one
         // would throw `Failed to find version: paper` and take the whole release down with it.
-        // CurseForge therefore carries the forty-five loader jars; the Paper jar ships on Modrinth
+        // CurseForge therefore carries the forty-eight loader jars; the Paper jar ships on Modrinth
         // and in the GitHub release.
 
-        // One release carrying all forty-six jars, rather than forty-six releases. The GitHub
+        // One release carrying all forty-nine jars, rather than forty-nine releases. The GitHub
         // release is the provenance record — "this tag produced these files" — and splitting it
         // would make that claim harder to check, not easier.
         github {
