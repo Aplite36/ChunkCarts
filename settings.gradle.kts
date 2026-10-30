@@ -36,7 +36,7 @@ stonecutter {
         branch("fabric") { versions(mcTargets) }
         branch("neoforge") { versions(mcTargets) }
         branch("forge") { versions(mcTargets) }
-        vcsVersion = "26.2"
+        vcsVersion = "26.3"
     }
 }
 

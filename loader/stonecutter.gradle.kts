@@ -2,9 +2,9 @@ plugins {
     id("dev.kikugie.stonecutter")
 }
 
-// The version whose source tree the IDE and the shared src/ link point at. 26.2 is the newest
+// The version whose source tree the IDE and the shared src/ link point at. 26.3 is the newest
 // target, which is where the adapter is written first.
-stonecutter active "26.2"
+stonecutter active "26.3"
 
 // Deliberately no `stonecutter tasks { order("build") }`, and no `dependsOn` on Stonecutter's own
 // task collection. Both reach across every node in the tree to realise its `build` task, which
