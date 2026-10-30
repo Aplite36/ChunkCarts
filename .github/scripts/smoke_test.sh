@@ -38,7 +38,7 @@ FABRIC_API_SHA256="2525f9b7bb5524d409404831f7af276a86f7f1e90245ae4bb7555fe088d00
 NEOFORGE="21.11.44"
 NEOFORGE_SHA256="b8ae291c1ebdf4d92e5f699e2323ec5493f10e7793452256b3682aebab3eb54f"
 FORGE="1.21.11-61.1.11"
-FORGE_SHA256="df4b5de7fa894eb416ad82c0ff2087a18de4198954dc8faefc5a3eefaa1d8c10"
+FORGE_SHA256="38b38b1bf0ad2aa910720cbc56b47e3deb081648ac352fb9cc25276501e5ad97"
 # Paper build for 1.21.11, from https://fill.papermc.io/v3/projects/paper/versions/1.21.11/builds
 # (the v2 API at api.papermc.io is deprecated and returns HTTP 410). Checksum pinned alongside it
 # so a compromised or reshuffled build cannot swap the jar out from under the version number.
