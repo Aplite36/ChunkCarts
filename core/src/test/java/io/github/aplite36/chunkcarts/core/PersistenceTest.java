@@ -59,6 +59,61 @@ class PersistenceTest extends EngineTest {
         assertFalse(engine().hasToken(cart.id()), "DORMANT means it needs a fresh token");
     }
 
+    // ---- the state byte is the format ----------------------------------------------------------
+
+    /** Byte 0 is the schema version, byte 1 the token flag, byte 2 the state. */
+    private static final int STATE_BYTE = 2;
+
+    private JourneyRecord withState(JourneyState state) {
+        return new JourneyRecord(false, state, new ChunkPos(OVERWORLD, 0, 0), 0, 0, 0,
+                0L, 0L, 0, new UUID(0L, 0L), Set.of());
+    }
+
+    @Test
+    @DisplayName("each state encodes to its literal byte")
+    void eachStateEncodesToItsLiteralByte() {
+        // Pinned against literals on purpose. A round trip cannot catch a renumbering, because
+        // encode and decode move together; the failure only shows up on the next restart, as a
+        // cart whose PAUSED reads back as something else and whose journey is then dropped.
+        // These numbers are the on-disk format. Changing one is changing what saved carts mean.
+        assertEquals(0, codec.encode(withState(JourneyState.DORMANT))[STATE_BYTE]);
+        assertEquals(2, codec.encode(withState(JourneyState.TRAVELLING))[STATE_BYTE]);
+        assertEquals(3, codec.encode(withState(JourneyState.PAUSED))[STATE_BYTE]);
+        assertEquals(4, codec.encode(withState(JourneyState.HOLDING))[STATE_BYTE]);
+        assertEquals(5, codec.encode(withState(JourneyState.STRANDED))[STATE_BYTE]);
+
+        // Five states, five codes, and 1 is not among them: it belonged to a state that no longer
+        // exists. Closing the gap would reinterpret every journey saved under the old numbering.
+        assertEquals(5, JourneyState.values().length,
+                "a new state needs a new code and a new literal above, not the next free number");
+        assertTrue(JourneyState.fromCode((byte) 1).isEmpty(), "code 1 is a permanent gap");
+    }
+
+    @Test
+    @DisplayName("each literal byte decodes back to its state")
+    void eachLiteralByteDecodesBackToItsState() {
+        for (JourneyState state : JourneyState.values()) {
+            byte[] encoded = codec.encode(withState(state));
+            assertEquals(Optional.of(state), JourneyState.fromCode(encoded[STATE_BYTE]));
+            assertEquals(state, codec.decode(encoded).orElseThrow().state());
+        }
+    }
+
+    @Test
+    @DisplayName("an unknown state code resets the cart to DORMANT")
+    void unknownStateCodeResetsToDormant() {
+        // A byte written by a build that knew a state this one does not. Same answer as an
+        // unknown schema version: discard rather than guess, and do not throw at the caller.
+        byte[] fromTheFuture = codec.encode(sampleRecord());
+        fromTheFuture[STATE_BYTE] = 99;
+
+        assertTrue(codec.decode(fromTheFuture).isEmpty());
+
+        FakeCart cart = FakeCart.at(OVERWORLD, 0, 0).rawState(fromTheFuture);
+        engine().restore(cart);
+        assertNoJourney(cart);
+    }
+
     @Test
     @DisplayName("a travelling cart re-registers on chunk load")
     void travellingCartReregistersOnChunkLoad() {
