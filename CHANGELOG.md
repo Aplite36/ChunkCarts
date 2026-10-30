@@ -158,6 +158,16 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   minimum is now 1, in both enforcement modes, and a lower value is raised with a warning.
 - `/chunkcarts why` now gives the right block for a cart at a negative coordinate. The position
   was rounded toward zero, so a cart at x -0.5 was reported at 0, one block east of where it was.
+- A train now keeps its followers when its lead goes through a portal or unloads first. The mod
+  could not tell a lead that crossed a portal or had its chunk unload from one that was destroyed,
+  and treated all three as destroyed: the followers' journeys ended on the near side and they
+  stopped, while the lead carried on alone on the far side, or alone after its chunk loaded again.
+  Each platform now passes on why the cart went. Only a destroyed lead ends the journey for the rest
+  of the train. A lead that crossed a portal rejoins its own journey on arrival, and the followers
+  still at the portal are kept on it until they cross. A lead whose chunk unloaded releases the
+  journey's chunks but keeps the journey, and resumes it with its train when it loads. A follower
+  that unloads stays on the journey and rejoins it when it loads, rather than coming back as a
+  journey of its own.
 
 ## [0.1.0] - 2026-07-27
 
