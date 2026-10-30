@@ -93,7 +93,7 @@ jobs:
           echo "version=$version" >> "$GITHUB_OUTPUT"
 
   core:
-    name: core and metrics tests
+    name: core, metrics and bukkit tests
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
@@ -108,8 +108,10 @@ jobs:
       # The core suite is the regression gate for the safety claim. It runs on its own, first, and
       # fast — if this is red nothing else matters. The metrics suite rides along because it is the
       # same shape of check: it pins the payload's field set, which is the enforceable half of the
-      # privacy claim in the README.
-      - run: ./gradlew :core:test :metrics:test
+      # privacy claim in the README. The bukkit suite covers the Paper command and listener. The
+      # `bukkit` job's build would run it too, but only after shadowing a jar; here it fails in the
+      # same place as the others and its report lands in the same artifact.
+      - run: ./gradlew :core:test :metrics:test :bukkit:test
 
       - if: failure()
         uses: actions/upload-artifact@v4
@@ -118,6 +120,35 @@ jobs:
           path: |
             core/build/reports/tests/test/
             metrics/build/reports/tests/test/
+            bukkit/build/reports/tests/test/
+
+  # loader/common is a shared source directory, not a project, so its tests compile and run on one
+  # node: Fabric 26.3. loader/fabric/build.gradle.kts says why that one. The node is also in the
+  # loader matrix, whose `build` runs these tests again; this job exists so they gate every run on
+  # their own, whatever build_matrix.py decides the subset is.
+  loader-common:
+    name: loader/common tests (fabric 26.3)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      # 25 for the 26.3 node, 21 for core and metrics, which it builds first.
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: |
+            21
+            25
+
+      - uses: gradle/actions/setup-gradle@v5
+
+      - run: ./gradlew :loader:fabric:26.3:test
+
+      - if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: loader-common-test-report
+          path: loader/fabric/versions/26.3/build/reports/tests/test/
 
   # The CI scripts fail a release rather than a test when they go wrong: smoke_test.sh carries the
   # download checksums and the boot check, and `bash -n` only proves they parse. shellcheck is
@@ -291,7 +322,7 @@ jobs:
   build-ok:
     name: Build OK
     runs-on: ubuntu-latest
-    needs: [core, scripts, bukkit, loader, smoke]
+    needs: [core, loader-common, scripts, bukkit, loader, smoke]
     if: always()
     steps:
       - name: Fail unless every job succeeded
