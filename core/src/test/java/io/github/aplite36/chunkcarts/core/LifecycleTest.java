@@ -44,7 +44,7 @@ class LifecycleTest extends EngineTest {
         travelStraight(cart, 3);
         assertTrue(tickets.heldCount() > 0);
 
-        engine().onCartRemoved(cart.id());
+        removeCart(cart);
 
         assertEquals(0, tickets.heldCount(), "the entity is gone; nothing should still be held for it");
         assertNoJourney(cart);
@@ -69,7 +69,7 @@ class LifecycleTest extends EngineTest {
 
         assertTrue(tickets.heldCount() > 0);
 
-        engine().onCartRemoved(follower.id());
+        removeCart(follower, lead);
 
         assertEquals(1, journeyOf(lead).cartCount(), "lead's journey survives the follower's removal");
         assertEquals(JourneyState.TRAVELLING, journeyOf(lead).state());
@@ -100,10 +100,44 @@ class LifecycleTest extends EngineTest {
 
         assertTrue(tickets.heldCount() > 0);
 
-        engine().onCartRemoved(lead.id());
+        removeCart(lead, follower);
 
         assertEquals(0, tickets.heldCount(), "removing the lead ends the journey and releases everything");
         assertNoJourney(follower);
+    }
+
+    @Test
+    @DisplayName("removing the lead returns the survivors' saved state to DORMANT")
+    void removingLeadFlushesSurvivorsToDormant() {
+        // The other half of removingNonLeadMemberDoesNotEndJourney. Tickets and the in-memory
+        // index were already cleaned up on this path; the entity was not, so the follower kept a
+        // record that still said TRAVELLING for a journey that was over.
+        cfg.regionRadius(1);
+        FakeCart lead = FakeCart.at(OVERWORLD, 0, 0).atBlock(8, 8);
+        FakeCart follower = new FakeCart(OVERWORLD).atBlock(9, 8);
+        grantToken(lead);
+        assertDeparted(engine().tryDepart(lead, List.of(lead, follower)));
+        for (int i = 0; i < 3; i++) {
+            lead.atChunk(lead.chunkX() + 1, lead.chunkZ());
+            follower.atBlock(lead.x() - 1, lead.z());
+            tickPoll(lead, follower);
+        }
+        assertEquals(JourneyState.TRAVELLING, persisted(follower).state(), "precondition");
+
+        removeCart(lead, follower);
+
+        assertEquals(JourneyState.DORMANT, persisted(follower).state(),
+                "the journey is over; the follower's saved state must say so");
+        assertTerminated(follower, TerminationReason.DROPPED);
+
+        // What the stale record bought: unload the follower's chunk and load it again, and restore
+        // rebuilds the finished journey and re-holds its region — off-budget, and with no token
+        // spent, because resuming a restored journey is not a departure.
+        ChunkCartsEngine afterReload = restarted();
+        afterReload.restore(follower);
+        assertTrue(afterReload.journeyOf(follower.id()).isEmpty(),
+                "an ended journey must not come back on the next chunk load");
+        assertEquals(0, tickets.heldCount(), "and it must not re-hold a region for free");
     }
 
     /**

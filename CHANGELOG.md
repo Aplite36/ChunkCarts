@@ -7,8 +7,77 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- `/chunkcarts why`, run in game looking at a cart: what it is doing, or what is stopping it. The
+  engine already worked out both answers and kept neither where anyone could see them. The reason a
+  journey ended reached only a console line, so a player standing next to a stranded cart could
+  learn nothing and an admin had to grep the log with a timestamp they did not have. The reason a
+  cart is being refused a departure was discarded outright unless debug logging was on — so a
+  station that had quietly stopped dispatching still gave a completely healthy-looking
+  `/chunkcarts list`, and finding out why meant flooding the console for every cart on the server
+  to diagnose one. A cooldown now says how much longer, too.
+- `/chunkcarts reload` now shows the config warnings to whoever ran it, not just to the console.
+  Someone runs reload to find out what their edit did, and got back "Config reloaded. Enforcement:
+  STRICT." while everything that would answer the question — each clamp naming the key, the value
+  they wrote and what it became — went to the log. It now reports the count even when it is zero,
+  because silence and success previously looked identical, and caps the list at eight lines with a
+  pointer to the console so a config full of mistyped keys cannot spew into chat.
+- `/chunkcarts list` now colours the held-chunk load level red unless every chunk is
+  `ENTITY_TICKING`. That tally is the only in-game evidence for the one claim no unit test can
+  reach — that the chunks the mod holds are actually ticking — and it rendered as plain text, so
+  `(TICKING x9)` and `(ENTITY_TICKING x9)` were the same shape and nobody noticed the difference.
+  Anything other than `ENTITY_TICKING` means carts sit motionless in loaded chunks.
+- `/chunkcarts list` also reports the tally when there are no active journeys but chunks are still
+  held, which is the leak shape and previously the one case where the number was hidden; names
+  where each cluster is *now* rather than only where it set off, which could be thousands of blocks
+  behind it; and pages, at eight rows a page, so the header carrying the totals is not the first
+  line to scroll away on a busy server.
+- `/chunkcarts help`, on every platform, listing each subcommand and what it is for rather than
+  just naming them. There was no help before, and what an unrecognised word did depended on which
+  jar you had installed: Paper printed a usage line for anything it did not recognise, so
+  `/chunkcarts help` happened to work, while Brigadier answered the same guess on Fabric, NeoForge
+  and Forge with "Unknown or incomplete command". Paper now answers an unknown subcommand with the
+  full help instead of a usage string, which was a second list of subcommands to forget to update.
+
+### Changed
+
+- The AFK-dispenser guard is now documented as what it is. `CartEvent` carried `HOPPER_INSERT`,
+  `DISPENSER_DISPATCH` and `PLAYER_NEARBY`, classified as not-interaction, and said that
+  classification was what stopped an AFK player beside a dispenser cycling a cart forever. No
+  adapter ever emitted any of the three, so it decided nothing, and the three tests that named the
+  policy passed by feeding the engine values nothing produces. What actually holds the guard up is
+  that no adapter listens for a hopper or a dispenser at all, so a dispenser-fired cart gets no
+  waiver and keeps its cooldown. The three constants and the three tests are gone, replaced by one
+  that exercises the path a dispenser really takes. No behaviour changes.
+
+### Removed
+
+- `CartView.lastInteractor()`, which was implemented on both platforms and called by nothing.
+  `notify-last-interactor` is served by each tracker's own map, read where the message is sent, so
+  every cart view built for a poll was paying a map lookup to fill a field no one read.
+
 ### Fixed
 
+- A failed `/chunkcarts reload` no longer leaves the mod dead. The command tore the runtime down
+  before it knew a replacement could be built, so one unreadable config file released every ticket,
+  shut the engine down and left nothing running, recoverable only by restarting the server. The
+  config is now read and validated first, and a file that cannot be used leaves the settings already
+  in force running untouched. The command says which of the three things happened instead of
+  reporting success either way — and on the mod loaders, a second reload after a failed one used to
+  answer with a NullPointerException that hid the real error.
+- `/chunkcarts list` on Paper now says "Not running." when the plugin is inert, as it always has on
+  the mod loaders. Paper kept its fields after a shutdown, so a plugin that had stopped working
+  reported no active journeys, zero chunks held and the old enforcement mode, with nothing in the
+  output to say anything was wrong.
+- An error inside the travel loop no longer takes a Fabric, NeoForge or Forge server down. Task
+  bodies ran with no exception isolation, so anything the engine threw went straight through the
+  adapter into the loader's tick event and became a crash report — while the same bug on Paper was
+  a stack trace and a plugin that limped on, because Bukkit's scheduler already catches. A fault is
+  now caught, logged against the task that threw, and the server keeps ticking. Repeats are
+  throttled rather than the task being disabled: the travel loop is what releases held chunks, so a
+  loop that stopped running would leave every chunk it had already claimed held indefinitely. The
+  ticket backend's per-tick sweep is guarded the same way.
 - Two carts on separate journeys no longer strand one another where their routes run close
   together. Wherever their held areas overlapped, the first cart to move on released a chunk the
   second was still relying on, and the second never took it back — so it could roll into unloaded
@@ -32,6 +101,17 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   accepting any version ever released. Installing a jar on an older loader is refused with a clear
   message rather than loading and then failing on a missing method with nothing to say why. The
   release checks now assert this, so it cannot quietly return.
+- A TNT, command block or spawner minecart parked against a cart that is about to depart no longer
+  travels with it. Only the cart at the front of a group was checked against the permitted types,
+  and whatever was touching it came along unexamined — chunks held for it, its whole route loaded.
+  These three types can never be enabled in the config, and standing next to something that can is
+  no longer a way around that.
+- Breaking the front cart of a travelling group now ends the journey properly for the carts left
+  behind. Their chunks were released and the journey dropped, but each survivor kept a saved record
+  that still said it was travelling, so the next time one of them unloaded and loaded again the
+  finished journey came back — re-holding its area without spending any of the travel budget or
+  needing a fresh departure. This is the other side of the group fix above, which covered a
+  follower being broken but not the lead.
 - A `cart-types` entry that is not `true` or `false` is now reported as disabling that cart type,
   which is what actually happens. The warning previously said the default was used, telling an
   admin the opposite of what became of the cart type they were trying to debug.
@@ -48,6 +128,24 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   "nothing to install on clients" the README promises. NeoForge lets a mod like this one through
   regardless, and is declared the same way for the sake of one rule rather than two. The release
   checks now assert the declaration on both, so it cannot quietly go missing again.
+- A whole number too large to be one is now a warning instead of a silently different setting.
+  `journey-budget-chunks: 3000000000` was applied as `-1294967296`, so every journey died on its
+  first check with nothing in the log connecting the two. Out-of-range values now fall back to the
+  default and say so, and `journey-budget-chunks`, `progress-slack-chunks` and
+  `max-concurrent-journeys` have a floor of 1 in both enforcement modes.
+- A config key that YAML reads as something other than text no longer stops the plugin loading. A
+  bare `on`, `off`, `yes`, `no`, `y` or `n` key, or a numeric one, is a boolean or a number to
+  every YAML parser, and the reader threw on it instead of warning — on the mod loaders, during
+  server startup, which took the server down with it. Such a key is now reported as unrecognised,
+  like any other typo.
+- A duration too large to be measured in milliseconds is now refused at load. `journey-cooldown:
+  999999999999999h` parsed cleanly and then threw on every departure attempt, forever, so no cart
+  ever set off. It now falls back to the default with a warning, and `journey-cooldown` is capped
+  at 24h in STRICT mode alongside the other durations.
+- `region-radius: 0` is no longer accepted. It held the cart's own chunk and nothing else, so the
+  cart stopped at the first chunk boundary; it tore apart any group of carts straddling one; and
+  it pinned the travel loop to a check every tick while `/chunkcarts list` blamed cart speed. The
+  minimum is now 1, in both enforcement modes, and a lower value is raised with a warning.
 
 ## [0.1.0] - 2026-07-27
 

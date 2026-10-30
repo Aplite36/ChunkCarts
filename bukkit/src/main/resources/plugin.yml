@@ -16,7 +16,7 @@ folia-supported: false
 commands:
   chunkcarts:
     description: Inspect and manage ChunkCarts.
-    usage: /chunkcarts <list|reload|debug>
+    usage: /chunkcarts <list|reload|debug|help>
     permission: chunkcarts.admin
     # No /cc alias: it collides with chat-clear commands on a great many servers.
     aliases: [ccarts]

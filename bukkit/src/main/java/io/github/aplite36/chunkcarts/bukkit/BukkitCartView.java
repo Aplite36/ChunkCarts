@@ -28,12 +28,10 @@ final class BukkitCartView implements CartView {
 
     private final Minecart cart;
     private final NamespacedKey stateKey;
-    private final UUID lastInteractor;
 
-    BukkitCartView(Minecart cart, NamespacedKey stateKey, UUID lastInteractor) {
+    BukkitCartView(Minecart cart, NamespacedKey stateKey) {
         this.cart = cart;
         this.stateKey = stateKey;
-        this.lastInteractor = lastInteractor;
     }
 
     Minecart entity() {
@@ -142,8 +140,4 @@ final class BukkitCartView implements CartView {
         cart.getPersistentDataContainer().set(stateKey, PersistentDataType.BYTE_ARRAY, state);
     }
 
-    @Override
-    public Optional<UUID> lastInteractor() {
-        return Optional.ofNullable(lastInteractor);
-    }
 }

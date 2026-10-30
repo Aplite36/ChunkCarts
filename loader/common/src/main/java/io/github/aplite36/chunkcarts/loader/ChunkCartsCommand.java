@@ -1,12 +1,22 @@
 package io.github.aplite36.chunkcarts.loader;
 
 import com.mojang.brigadier.CommandDispatcher;
+import com.mojang.brigadier.arguments.IntegerArgumentType;
 import com.mojang.brigadier.builder.LiteralArgumentBuilder;
+import com.mojang.brigadier.tree.CommandNode;
 import io.github.aplite36.chunkcarts.core.ChunkCartsEngine;
+import io.github.aplite36.chunkcarts.core.CommandHelp;
+import io.github.aplite36.chunkcarts.core.ConfigSwap;
 import io.github.aplite36.chunkcarts.core.JourneySnapshot;
+import io.github.aplite36.chunkcarts.core.WhyReport;
+import io.github.aplite36.chunkcarts.core.platform.CartView;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
+import net.minecraft.ChatFormatting;
 import net.minecraft.network.chat.Component;
+import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.phys.Vec3;
+import net.minecraft.network.chat.MutableComponent;
 //? if >=1.21.11 {
 import net.minecraft.resources.Identifier;
 import net.minecraft.server.permissions.Permission;
@@ -15,11 +25,15 @@ import net.minecraft.server.permissions.Permissions;
 
 import java.util.List;
 import java.util.Locale;
+import java.util.Optional;
+import java.util.Set;
+import java.util.TreeSet;
 import java.util.function.Predicate;
 import java.util.function.Supplier;
+import java.util.stream.Collectors;
 
 /**
- * {@code /chunkcarts list|reload|debug}.
+ * {@code /chunkcarts list|reload|debug|help}.
  *
  * <p>{@code list} matters more than it looks: it is how an admin checks that the mod is not doing
  * anything it should not be. A cluster is one row showing its cart count, so the row count
@@ -61,12 +75,77 @@ public final class ChunkCartsCommand {
     }
 
     private LiteralArgumentBuilder<CommandSourceStack> build(String name) {
-        return Commands.literal(name)
+        LiteralArgumentBuilder<CommandSourceStack> root = Commands.literal(name)
                 .requires(IS_ADMIN)
-                .executes(ctx -> list(ctx.getSource()))
-                .then(Commands.literal("list").executes(ctx -> list(ctx.getSource())))
+                .executes(ctx -> list(ctx.getSource(), 1))
+                .then(Commands.literal("list")
+                        .executes(ctx -> list(ctx.getSource(), 1))
+                        .then(Commands.argument("page", IntegerArgumentType.integer(1))
+                                .executes(ctx -> list(ctx.getSource(),
+                                        IntegerArgumentType.getInteger(ctx, "page")))))
                 .then(Commands.literal("reload").executes(ctx -> reload(ctx.getSource())))
-                .then(Commands.literal("debug").executes(ctx -> debug(ctx.getSource())));
+                .then(Commands.literal("debug").executes(ctx -> debug(ctx.getSource())))
+                .then(Commands.literal("why").executes(ctx -> why(ctx.getSource())))
+                // Brigadier answers an unregistered word with "Unknown or incomplete command" and a
+                // caret, so unlike Paper there is no default branch to fall into. help has to be a
+                // literal like the rest.
+                .then(Commands.literal("help").executes(ctx -> help(ctx.getSource(), name)));
+
+        // The tree is written out rather than generated from CommandHelp, because a command tree
+        // is easier to read declaratively and this is the shape every other mod's looks like. The
+        // cost of writing it twice is that the two can drift, which is the whole of #30 — so they
+        // are compared here instead, and a subcommand registered without a help line (or the
+        // reverse) fails at registration rather than at whatever point someone runs help.
+        Set<String> registered = root.getArguments().stream()
+                .map(CommandNode::getName)
+                .collect(Collectors.toCollection(TreeSet::new));
+        if (!registered.equals(new TreeSet<>(CommandHelp.SUBCOMMANDS))) {
+            throw new IllegalStateException("/" + name + " registers " + registered
+                    + " but CommandHelp lists " + new TreeSet<>(CommandHelp.SUBCOMMANDS)
+                    + "; the two have to match");
+        }
+        return root;
+    }
+
+    /**
+     * {@code /chunkcarts why} — what the cart the sender is looking at is doing, or what is
+     * stopping it.
+     *
+     * <p>The platform half is here and the answer is assembled in {@code core}, so this and the
+     * Paper command cannot report differently. Console has no eyes, so it is refused rather than
+     * answered about an arbitrary cart.
+     */
+    private int why(CommandSourceStack source) {
+        ChunkCartsEngine engine = mod.engine();
+        if (engine == null) {
+            send(source, "Not running.");
+            return 0;
+        }
+        ServerPlayer player = source.getPlayer();
+        if (player == null) {
+            send(source, "Run this in game, looking at a cart — the console has nowhere to look "
+                    + "from. /chunkcarts list is the console view.");
+            return 0;
+        }
+        Vec3 eye = player.getEyePosition();
+        Vec3 look = player.getLookAngle();
+        List<WhyReport.Candidate> carts = mod.cartsNear(player, WhyReport.RANGE);
+
+        Optional<CartView> view = WhyReport
+                .target(eye.x, eye.y, eye.z, look.x, look.y, look.z, carts)
+                .flatMap(mod::viewOf);
+        if (view.isEmpty()) {
+            send(source, "No minecart within " + (int) WhyReport.RANGE + " blocks that ChunkCarts "
+                    + "is tracking.");
+            return 0;
+        }
+        WhyReport.lines(view.get(), engine).forEach(line -> send(source, line));
+        return 1;
+    }
+
+    private int help(CommandSourceStack source, String label) {
+        CommandHelp.lines(label).forEach(line -> send(source, line));
+        return 1;
     }
 
     private int debug(CommandSourceStack source) {
@@ -75,32 +154,70 @@ public final class ChunkCartsCommand {
         return 1;
     }
 
-    private int list(CommandSourceStack source) {
+    /**
+     * Rows per page. A chat window shows about ten lines, and the header is the one carrying the
+     * totals — at the STRICT cap of 64 journeys an unpaged list scrolls it away first.
+     */
+    private static final int PAGE_SIZE = 8;
+
+    private int list(CommandSourceStack source, int page) {
         ChunkCartsEngine engine = mod.engine();
         if (engine == null) {
             send(source, "Not running.");
             return 0;
         }
         List<JourneySnapshot> journeys = engine.journeys();
+        int held = mod.heldChunkCount();
+
         if (journeys.isEmpty()) {
-            send(source, "No active journeys. " + mod.heldChunkCount() + " chunks held, "
-                    + String.format(Locale.ROOT, "%.1f", engine.effectiveTps()) + " TPS"
-                    + clampedInterval(engine) + ".");
+            // The tally used to appear only while carts were moving, which is the opposite of
+            // useful: chunks held with no journey holding them is the leak shape, and it is
+            // visible precisely when the list is otherwise empty.
+            sendHeader(source, "No active journeys. " + held + " chunks held",
+                    held > 0 ? " (" + mod.heldChunkLevels() + ")" : "",
+                    ", " + tps(engine) + " TPS" + clampedInterval(engine) + ".");
             return 1;
         }
-        send(source, journeys.size() + "/" + engine.config().maxConcurrentJourneys()
-                + " journeys, " + mod.heldChunkCount() + " chunks held ("
-                + mod.heldChunkLevels() + "), "
-                + String.format(Locale.ROOT, "%.1f", engine.effectiveTps()) + " TPS"
-                + clampedInterval(engine) + ":");
-        for (JourneySnapshot journey : journeys) {
-            send(source, String.format(Locale.ROOT,
-                    "  %-10s %d cart(s)  %s from %d,%d  distance %d  slack %d  budget %d",
-                    journey.state(), journey.cartCount(), journey.origin().world().value(),
-                    journey.origin().cx(), journey.origin().cz(), journey.distanceRecord(),
-                    journey.slackUsed(), journey.budgetRemaining()));
+
+        int pages = (journeys.size() + PAGE_SIZE - 1) / PAGE_SIZE;
+        int shown = Math.min(Math.max(page, 1), pages);
+        sendHeader(source, journeys.size() + "/" + engine.config().maxConcurrentJourneys()
+                        + " journeys, " + held + " chunks held",
+                " (" + mod.heldChunkLevels() + ")",
+                ", " + tps(engine) + " TPS" + clampedInterval(engine)
+                        + (pages > 1 ? "  — page " + shown + "/" + pages : "") + ":");
+
+        int from = (shown - 1) * PAGE_SIZE;
+        for (JourneySnapshot journey : journeys.subList(from, Math.min(from + PAGE_SIZE, journeys.size()))) {
+            send(source, row(journey));
+        }
+        if (shown < pages) {
+            send(source, "  ... /chunkcarts list " + (shown + 1) + " for the next "
+                    + Math.min(PAGE_SIZE, journeys.size() - from - PAGE_SIZE) + ".");
         }
         return journeys.size();
+    }
+
+    /**
+     * One journey. {@code near} is where the cluster is now and {@code from} is where it set off —
+     * the row used to carry only the second, which can be thousands of blocks behind the cart and
+     * gives an admin no way to go and look at a journey they are worried about.
+     */
+    private static String row(JourneySnapshot journey) {
+        String near = journey.approximateChunk()
+                .map(chunk -> String.format(Locale.ROOT, "near %s %d,%d",
+                        chunk.world().value(), chunk.cx() * 16, chunk.cz() * 16))
+                .orElse("holding nothing");
+        return String.format(Locale.ROOT,
+                "  %-10s %d cart(s)  %s  from %s %d,%d  distance %d  slack %d  budget %d",
+                journey.state(), journey.cartCount(), near,
+                journey.origin().world().value(), journey.origin().cx() * 16,
+                journey.origin().cz() * 16, journey.distanceRecord(),
+                journey.slackUsed(), journey.budgetRemaining());
+    }
+
+    private static String tps(ChunkCartsEngine engine) {
+        return String.format(Locale.ROOT, "%.1f", engine.effectiveTps());
     }
 
     /**
@@ -114,13 +231,59 @@ public final class ChunkCartsCommand {
                 : ", polling every " + effective + " tick(s) — clamped on cart velocity";
     }
 
+    /**
+     * The header, with the load-level tally coloured red unless every held chunk is
+     * {@code ENTITY_TICKING}.
+     *
+     * <p>This is the one line in the command that reports something no unit test can reach: that
+     * the chunks the mod holds are actually ticking. Anything else means carts sit motionless in
+     * loaded chunks. It rendered as plain text, so the healthy case and the broken case were the
+     * same shape and nobody reading {@code (TICKING x9)} noticed it was not
+     * {@code (ENTITY_TICKING x9)}.
+     */
+    private void sendHeader(CommandSourceStack source, String before, String tally, String after) {
+        MutableComponent text = Component.literal("[ChunkCarts] " + before);
+        if (!tally.isEmpty()) {
+            text = text.append(Component.literal(tally).withStyle(mod.heldChunksAllTicking()
+                    ? ChatFormatting.WHITE
+                    : ChatFormatting.RED));
+        }
+        MutableComponent line = text.append(Component.literal(after));
+        source.sendSuccess(() -> line, false);
+    }
+
     private int reload(CommandSourceStack source) {
         // Every ticket is released and every journey re-read from the cart's own data, which is the
         // source of truth. Carts in flight carry on; they do not need a fresh token,
         // because resuming a restored journey is not a departure.
-        mod.reloadRuntime();
-        send(source, "Config reloaded. Enforcement: " + mod.engine().config().enforcement() + ".");
-        return 1;
+        //
+        // Reading mod.engine() unconditionally used to be an NPE on a failed reload, which left the
+        // engine null: the first reload reported the real error and every reload after it reported
+        // the NPE instead, hiding it.
+        ConfigSwap.Result result = mod.reloadRuntime();
+        ConfigSwap.Outcome outcome = result.outcome();
+        ChunkCartsEngine engine = mod.engine();
+        switch (outcome) {
+            // The warnings are why someone runs reload in the first place: each one names the key,
+            // the value they wrote and what it was changed to. They all went to the console, which
+            // is the one place the person who just ran the command is not looking. The count is
+            // stated even at zero, because otherwise silence and success read the same.
+            case RELOADED -> {
+                send(source, "Config reloaded. Enforcement: " + engine.config().enforcement() + ". "
+                        + (result.warnings().isEmpty()
+                                ? "Nothing to report."
+                                : result.warnings().size() + " warning(s):"));
+                ConfigSwap.report(result.warnings()).forEach(line -> send(source, line));
+            }
+            case KEPT -> send(source, engine == null
+                    ? "Not running, so there was nothing to reload."
+                    : "Config NOT reloaded — the file on disk could not be read. Still running on "
+                            + "the settings already in force (" + engine.config().enforcement()
+                            + "). The reason is in the console.");
+            case BROKEN -> send(source, "Config read but the runtime could not be rebuilt. "
+                    + "ChunkCarts is NOT running — see the console, then restart the server.");
+        }
+        return outcome == ConfigSwap.Outcome.RELOADED ? 1 : 0;
     }
 
     private static void send(CommandSourceStack source, String message) {

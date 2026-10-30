@@ -3,7 +3,9 @@ package io.github.aplite36.chunkcarts.neoforge;
 import io.github.aplite36.chunkcarts.core.CartEvent;
 import io.github.aplite36.chunkcarts.core.ChunkCartsEngine;
 import io.github.aplite36.chunkcarts.core.Config;
-import io.github.aplite36.chunkcarts.core.ConfigReader;
+import io.github.aplite36.chunkcarts.core.ConfigSwap;
+import io.github.aplite36.chunkcarts.core.WhyReport;
+import io.github.aplite36.chunkcarts.core.platform.CartView;
 import io.github.aplite36.chunkcarts.loader.CartTracker;
 import io.github.aplite36.chunkcarts.loader.ChunkCarts;
 import io.github.aplite36.chunkcarts.loader.ChunkCartsCommand;
@@ -18,7 +20,9 @@ import io.github.aplite36.chunkcarts.loader.SystemClock;
 import io.github.aplite36.chunkcarts.loader.TickScheduler;
 import io.github.aplite36.chunkcarts.metrics.ChunkCartsMetrics;
 import net.minecraft.server.MinecraftServer;
+import net.minecraft.server.level.FullChunkStatus;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.Container;
 import net.minecraft.world.entity.Entity;
 //? if >=1.21.11 {
@@ -47,6 +51,7 @@ import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
@@ -71,6 +76,9 @@ public final class ChunkCartsNeoForge implements ChunkCartsMod {
     private static final Logger LOGGER = LoggerFactory.getLogger(MOD_ID);
 
     private static final String TRAVEL_LOOP = "chunkcarts-travel-loop";
+
+    /** The ticket backend's per-tick sweep. Named so a fault in it is attributable. */
+    private static final String TICKET_SWEEP = "chunkcarts-ticket-sweep";
 
     /**
      * Mods that also hold chunks <em>for minecarts</em>. Both cannot be right.
@@ -179,6 +187,23 @@ public final class ChunkCartsNeoForge implements ChunkCartsMod {
     }
 
     @Override
+    public List<WhyReport.Candidate> cartsNear(ServerPlayer player, double range) {
+        return tracker == null ? List.of() : tracker.candidatesNear(player, range);
+    }
+
+    @Override
+    public Optional<CartView> viewOf(UUID cartId) {
+        return tracker == null ? Optional.empty() : tracker.viewOf(cartId);
+    }
+
+    @Override
+    public boolean heldChunksAllTicking() {
+        return tickets == null
+                || tickets.heldLevels().keySet().stream()
+                        .allMatch(status -> status == FullChunkStatus.ENTITY_TICKING);
+    }
+
+    @Override
     public boolean toggleDebug() {
         debug = !debug;
         if (tracker != null) {
@@ -190,26 +215,50 @@ public final class ChunkCartsNeoForge implements ChunkCartsMod {
         return debug;
     }
 
-    /** Tears the runtime down and builds it again from the file on disk. */
+    /**
+     * Rebuilds the runtime from the file on disk, reading it before anything is torn down.
+     *
+     * <p>{@link ConfigSwap} holds the ordering and the reasoning; all four adapters go through it so
+     * they cannot disagree about what a failed reload leaves behind.
+     */
     @Override
-    public void reloadRuntime() {
+    public ConfigSwap.Result reloadRuntime() {
         MinecraftServer running = server;
-        stop();
-        if (running != null) {
-            start(running);
+        if (running == null) {
+            return new ConfigSwap.Result(ConfigSwap.Outcome.KEPT, List.of());
+        }
+        ConfigSwap.Result result = ConfigSwap.swap(
+                this::readConfig,
+                this::stop,
+                prepared -> {
+                    start(running, prepared);
+                    // Not available before this point: resolve() runs inside the engine's
+                    // constructor, so the clamp warnings do not exist until it does.
+                    return engine.startupWarnings();
+                },
+                (message, error) -> LOGGER.error(message, error));
+        if (result.outcome() == ConfigSwap.Outcome.RELOADED) {
             tracker.setDebug(debug);
             tickets.setDebug(debug);
         }
+        return result;
+    }
+
+    /** Reads and validates the config on disk. Touches nothing that is running. */
+    private ConfigSwap.Prepared readConfig() {
+        return ConfigSwap.prepare(ConfigFile.load(LOGGER, FMLPaths.CONFIGDIR.get()));
     }
 
     private void start(MinecraftServer startedServer) {
+        start(startedServer, readConfig());
+    }
+
+    private void start(MinecraftServer startedServer, ConfigSwap.Prepared prepared) {
         server = startedServer;
 
-        ConfigReader.Result parsed =
-                ConfigReader.read(ConfigFile.load(LOGGER, FMLPaths.CONFIGDIR.get()));
-        parsed.warnings().forEach(LOGGER::warn);
+        prepared.warnings().forEach(LOGGER::warn);
 
-        Config config = parsed.builder().build();
+        Config config = prepared.config();
         worlds = new LevelWorldQuery(startedServer);
         tickets = new LevelTicketBackend(worlds, LOGGER);
         engine = new ChunkCartsEngine(config, worlds, tickets, new SystemClock());
@@ -228,7 +277,7 @@ public final class ChunkCartsNeoForge implements ChunkCartsMod {
             }
         }
 
-        scheduler = new TickScheduler();
+        scheduler = new TickScheduler(LOGGER);
         scheduler.repeating(TRAVEL_LOOP, engine.effectivePollIntervalTicks(), this::runTravelLoop);
 
         startMetrics(startedServer);
@@ -313,7 +362,9 @@ public final class ChunkCartsNeoForge implements ChunkCartsMod {
         // this flag, and the player list is the thing the flag is about. Reading it once per tick
         // costs a size check and cannot drift out of step with reality the way an event pair can.
         engine.setPlayersOnline(!ticking.getPlayerList().getPlayers().isEmpty());
-        tickets.tick();
+        // Both run on the loader's tick event, where an escaping throw is a crash report rather
+        // than a logged mistake, so neither is allowed to escape. See TickLoop.
+        scheduler.guarded(TICKET_SWEEP, tickets::tick);
         scheduler.tick(ticking);
     }
 

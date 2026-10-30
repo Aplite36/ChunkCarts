@@ -2,18 +2,24 @@ package io.github.aplite36.chunkcarts.bukkit;
 
 import io.github.aplite36.chunkcarts.core.ChunkCartsEngine;
 import io.github.aplite36.chunkcarts.core.Config;
-import io.github.aplite36.chunkcarts.core.ConfigReader;
+import io.github.aplite36.chunkcarts.core.ConfigSwap;
+import io.github.aplite36.chunkcarts.core.WhyReport;
+import io.github.aplite36.chunkcarts.core.platform.CartView;
 import io.github.aplite36.chunkcarts.metrics.ChunkCartsMetrics;
+import org.bukkit.Chunk;
 import org.bukkit.NamespacedKey;
 import org.bukkit.World;
 import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.entity.Minecart;
+import org.bukkit.entity.Player;
 import org.bukkit.event.HandlerList;
 import org.bukkit.plugin.java.JavaPlugin;
 
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
+import java.util.UUID;
 
 /**
  * Entry point and wiring. Owns nothing policy-shaped: every rule lives in
@@ -96,7 +102,7 @@ public final class ChunkCartsPlugin extends JavaPlugin {
     }
 
     int heldChunkCount() {
-        return tickets.heldCount();
+        return tickets == null ? 0 : tickets.heldCount();
     }
 
     /**
@@ -106,32 +112,88 @@ public final class ChunkCartsPlugin extends JavaPlugin {
      * evidence for the claim no unit test can reach, that held chunks actually tick.
      */
     String heldChunkLevels() {
+        if (tickets == null) {
+            return "";
+        }
         return tickets.heldLevels().entrySet().stream()
                 .map(e -> e.getKey() + " x" + e.getValue())
                 .collect(java.util.stream.Collectors.joining(", "));
     }
 
+    /**
+     * Whether every held chunk is at {@code ENTITY_TICKING}, which is the only level at which a
+     * cart inside one actually moves. Separate from {@link #heldChunkLevels()} rather than derived
+     * from it, because the two platforms tally different enum types and the command would
+     * otherwise have to parse a string to find out whether to sound an alarm.
+     */
+    /** Tracked carts within {@code range} of a player, for {@code /chunkcarts why}. */
+    List<WhyReport.Candidate> cartsNear(Player player, double range) {
+        return tracker == null ? List.of() : tracker.candidatesNear(player, range);
+    }
+
+    /** A core view of one tracked cart, for {@code /chunkcarts why}. */
+    Optional<CartView> viewOf(UUID cartId) {
+        return tracker == null ? Optional.empty() : tracker.viewOf(cartId);
+    }
+
+    boolean heldChunksAllTicking() {
+        return tickets == null
+                || tickets.heldLevels().keySet().stream()
+                        .allMatch(level -> level == Chunk.LoadLevel.ENTITY_TICKING);
+    }
+
     boolean toggleDebug() {
         debug = !debug;
-        tracker.setDebug(debug);
-        tickets.setDebug(debug);
+        if (tracker != null) {
+            tracker.setDebug(debug);
+        }
+        if (tickets != null) {
+            tickets.setDebug(debug);
+        }
         return debug;
     }
 
-    /** Tears the runtime down and builds it again from the file on disk. */
-    void reloadRuntime() {
-        stop();
+    /**
+     * Rebuilds the runtime from the file on disk, reading it before anything is torn down.
+     *
+     * <p>{@link ConfigSwap} holds the ordering and the reasoning; all four adapters go through it so
+     * they cannot disagree about what a failed reload leaves behind.
+     */
+    ConfigSwap.Result reloadRuntime() {
+        ConfigSwap.Result result = ConfigSwap.swap(
+                this::readConfig,
+                this::stop,
+                prepared -> {
+                    start(prepared);
+                    // Not available before this point: resolve() runs inside the engine's
+                    // constructor, so the clamp warnings do not exist until it does.
+                    return engine.startupWarnings();
+                },
+                (message, error) -> getLogger().log(java.util.logging.Level.SEVERE, message, error));
+        if (result.outcome() == ConfigSwap.Outcome.RELOADED) {
+            tracker.setDebug(debug);
+            tickets.setDebug(debug);
+        }
+        return result;
+    }
+
+    /**
+     * Reads and validates the config on disk. Touches nothing that is running: {@code reloadConfig}
+     * replaces the plugin's own copy of the file, which the runtime does not consult after start.
+     */
+    private ConfigSwap.Prepared readConfig() {
         reloadConfig();
-        start();
-        tracker.setDebug(debug);
-        tickets.setDebug(debug);
+        return ConfigSwap.prepare(toMap(getConfig()));
     }
 
     private void start() {
-        ConfigReader.Result parsed = ConfigReader.read(toMap(getConfig()));
-        parsed.warnings().forEach(getLogger()::warning);
+        start(readConfig());
+    }
 
-        Config config = parsed.builder().build();
+    private void start(ConfigSwap.Prepared prepared) {
+        prepared.warnings().forEach(getLogger()::warning);
+
+        Config config = prepared.config();
         BukkitWorldQuery worlds = new BukkitWorldQuery(getServer());
         tickets = new PluginTicketBackend(this, worlds, getLogger());
         engine = new ChunkCartsEngine(config, worlds, tickets, new SystemClock());
@@ -174,6 +236,12 @@ public final class ChunkCartsPlugin extends JavaPlugin {
         }
     }
 
+    /**
+     * Fields are nulled, matching the three loaders. They were not, which is why a plugin left
+     * inert by a failed reload still reported as healthy: {@code list} read the shut-down engine and
+     * printed "No active journeys. 0 chunks held" under the old config's enforcement mode, with
+     * nothing in the output saying the plugin had stopped working.
+     */
     private void stop() {
         if (scheduler != null) {
             scheduler.cancelAll();
@@ -186,6 +254,11 @@ public final class ChunkCartsPlugin extends JavaPlugin {
             // chunks leak until the next restart.
             engine.shutdown();
         }
+        engine = null;
+        tracker = null;
+        tickets = null;
+        scheduler = null;
+        listener = null;
     }
 
     private void warnAboutRivals() {

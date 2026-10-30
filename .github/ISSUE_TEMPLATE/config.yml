@@ -1,0 +1,4 @@
+# Forces every issue through one of the two forms above. The whole point of adding them is
+# structured reports instead of "my carts keep loading chunks" with three follow-up round trips,
+# and a blank option would just route straight back around that.
+blank_issues_enabled: false
