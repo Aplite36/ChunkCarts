@@ -9,6 +9,14 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- An error inside the travel loop no longer takes a Fabric, NeoForge or Forge server down. Task
+  bodies ran with no exception isolation, so anything the engine threw went straight through the
+  adapter into the loader's tick event and became a crash report — while the same bug on Paper was
+  a stack trace and a plugin that limped on, because Bukkit's scheduler already catches. A fault is
+  now caught, logged against the task that threw, and the server keeps ticking. Repeats are
+  throttled rather than the task being disabled: the travel loop is what releases held chunks, so a
+  loop that stopped running would leave every chunk it had already claimed held indefinitely. The
+  ticket backend's per-tick sweep is guarded the same way.
 - Two carts on separate journeys no longer strand one another where their routes run close
   together. Wherever their held areas overlapped, the first cart to move on released a chunk the
   second was still relying on, and the second never took it back — so it could roll into unloaded
