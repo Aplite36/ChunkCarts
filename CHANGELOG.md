@@ -44,6 +44,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- On Fabric, NeoForge and Forge, the server software ChunkCarts reports to bStats is now the
+  server's own brand rather than the loader name ChunkCarts was built for. On a plain loader server
+  that is the same name, lower-cased (`fabric`, `neoforge`, `forge`); a hybrid server running a
+  loader jar now shows up as itself instead of as the loader. Nothing new is sent: it is the same
+  field with a more accurate value, and the `platform` chart still names the loader.
 - The AFK-dispenser guard is now documented as what it is. `CartEvent` carried `HOPPER_INSERT`,
   `DISPENSER_DISPATCH` and `PLAYER_NEARBY`, classified as not-interaction, and said that
   classification was what stopped an AFK player beside a dispenser cycling a cart forever. No

@@ -42,8 +42,10 @@ class ChunkCartsMetricsTest {
     private static final class FakePlatform implements MetricsPlatform {
 
         boolean wanted = true;
+        String brand = "TestBrand";
 
         @Override public String serverSoftware() { return "Fabric"; }
+        @Override public String serverBrand() { return brand; }
         @Override public String minecraftVersion() { return "1.21.11"; }
         @Override public int playerCount() { return 3; }
         @Override public boolean onlineMode() { return true; }
@@ -105,10 +107,29 @@ class ChunkCartsMetricsTest {
     }
 
     @Test
-    @DisplayName("the platform chart reports the same server software as the disclosed field")
-    void platformChartMatchesServerSoftware() {
+    @DisplayName("the platform chart reports which ChunkCarts jar is running, not the brand")
+    void platformChartReportsTheLoader() {
         FakePlatform platform = new FakePlatform();
         assertEquals(platform.serverSoftware(), customChartValues(platform).get("platform"));
+    }
+
+    @Test
+    @DisplayName("bukkitName carries the server's own brand")
+    void serverNameIsTheBrand() {
+        assertTrue(platformJson(new FakePlatform()).contains("\"bukkitName\":\"TestBrand\""),
+                platformJson(new FakePlatform()));
+    }
+
+    @Test
+    @DisplayName("a server with no brand reports the loader name instead")
+    void missingBrandFallsBackToTheLoader() {
+        FakePlatform platform = new FakePlatform();
+        for (String none : new String[] {null, "", "  "}) {
+            platform.brand = none;
+            String json = platformJson(platform);
+            assertTrue(json.contains("\"bukkitName\":\"Fabric\""), json);
+            assertTrue(json.contains("Fabric (MC: 1.21.11)"), json);
+        }
     }
 
     @Test
@@ -125,7 +146,7 @@ class ChunkCartsMetricsTest {
     @Test
     @DisplayName("the game version is sent in the shape the game-version chart reads")
     void gameVersionUsesTheBukkitVersionShape() {
-        assertTrue(platformJson(new FakePlatform()).contains("Fabric (MC: 1.21.11)"),
+        assertTrue(platformJson(new FakePlatform()).contains("TestBrand (MC: 1.21.11)"),
                 "bukkitVersion must keep the `<software> (MC: <version>)` shape");
     }
 

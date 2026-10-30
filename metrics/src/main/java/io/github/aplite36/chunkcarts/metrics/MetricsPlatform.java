@@ -13,8 +13,22 @@ package io.github.aplite36.chunkcarts.metrics;
  */
 public interface MetricsPlatform {
 
-    /** Server software as an admin would name it: {@code Paper}, {@code Fabric}, {@code Forge}. */
+    /**
+     * Which ChunkCarts jar is running, as an admin would name it: {@code Paper}, {@code Fabric},
+     * {@code Forge}. This is the {@code platform} chart.
+     */
     String serverSoftware();
+
+    /**
+     * The brand the server reports for itself, which is what goes in {@code bukkitName}.
+     *
+     * <p>On Paper this is the same as {@link #serverSoftware()}. On the loaders it is
+     * {@code MinecraftServer.getServerModName()}: on a plain loader server that is just the loader
+     * again ({@code fabric}, {@code neoforge}, {@code forge}), but a hybrid running a ChunkCarts loader
+     * jar names itself here, which the loader name cannot show. Null or blank means "no answer", and
+     * {@link #serverSoftware()} is sent instead.
+     */
+    String serverBrand();
 
     /** The Minecraft version, plain, as {@code 1.21.11}. */
     String minecraftVersion();

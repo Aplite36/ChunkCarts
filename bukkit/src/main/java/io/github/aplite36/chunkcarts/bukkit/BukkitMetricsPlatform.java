@@ -71,6 +71,12 @@ final class BukkitMetricsPlatform implements MetricsPlatform {
         return Bukkit.getName();
     }
 
+    /** {@code Bukkit.getName()} already is the brand, so there is nothing further to ask. */
+    @Override
+    public String serverBrand() {
+        return Bukkit.getName();
+    }
+
     @Override
     public String minecraftVersion() {
         return Bukkit.getMinecraftVersion();
