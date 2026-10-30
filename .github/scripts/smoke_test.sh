@@ -30,20 +30,33 @@ JAR_DIR="${3:?directory containing the built jar}"
 # the two installer jars are ever executed.
 FABRIC_LOADER="0.19.3"
 FABRIC_INSTALLER="1.1.1"
-# Launcher jar for MC 1.21.11 specifically (server/jar embeds $MC in its own URL below); build.yml's
-# SMOKE_MC pins every loader to that version, so this holds for how the script is actually invoked.
-FABRIC_LAUNCHER_SHA256="ed1b811d75555bd18dfc2b15199d94559ee2aab035e3c92ee43d3c4addca819f"
-FABRIC_API="0.141.5+1.21.11"
-FABRIC_API_SHA256="2525f9b7bb5524d409404831f7af276a86f7f1e90245ae4bb7555fe088d00e0d"
-NEOFORGE="21.11.44"
-NEOFORGE_SHA256="b8ae291c1ebdf4d92e5f699e2323ec5493f10e7793452256b3682aebab3eb54f"
-FORGE="1.21.11-61.1.11"
-FORGE_SHA256="38b38b1bf0ad2aa910720cbc56b47e3deb081648ac352fb9cc25276501e5ad97"
-# Paper build for 1.21.11, from https://fill.papermc.io/v3/projects/paper/versions/1.21.11/builds
-# (the v2 API at api.papermc.io is deprecated and returns HTTP 410). Checksum pinned alongside it
-# so a compromised or reshuffled build cannot swap the jar out from under the version number.
-PAPER_BUILD="132"
-PAPER_SHA256="5ffef465eeeb5f2a3c23a24419d97c51afd7dbb4923ff42df9a3f58bba1ccfba"
+
+# Everything else is tied to one game version: the Fabric launcher URL embeds $MC, and Fabric API,
+# NeoForge, Forge and the Paper build are each published per game version. So the pins are keyed
+# by version, and a version with no entry stops here with a message that names the fix. Without
+# that, bumping SMOKE_MC alone surfaced as a checksum mismatch on the Fabric launcher, which reads
+# like a compromised download rather than a stale constant (#55).
+#
+# The Paper build is from https://fill.papermc.io/v3/projects/paper/versions/<mc>/builds (the v2
+# API at api.papermc.io is deprecated and returns HTTP 410).
+case "$MC" in
+    1.21.11)
+        FABRIC_LAUNCHER_SHA256="ed1b811d75555bd18dfc2b15199d94559ee2aab035e3c92ee43d3c4addca819f"
+        FABRIC_API="0.141.5+1.21.11"
+        FABRIC_API_SHA256="2525f9b7bb5524d409404831f7af276a86f7f1e90245ae4bb7555fe088d00e0d"
+        NEOFORGE="21.11.44"
+        NEOFORGE_SHA256="b8ae291c1ebdf4d92e5f699e2323ec5493f10e7793452256b3682aebab3eb54f"
+        FORGE="1.21.11-61.1.11"
+        FORGE_SHA256="38b38b1bf0ad2aa910720cbc56b47e3deb081648ac352fb9cc25276501e5ad97"
+        PAPER_BUILD="132"
+        PAPER_SHA256="5ffef465eeeb5f2a3c23a24419d97c51afd7dbb4923ff42df9a3f58bba1ccfba"
+        ;;
+    *)
+        echo "smoke_test.sh has no pinned downloads for Minecraft $MC. Add a '$MC)' entry to the" \
+            "case block near the top, with each version and its sha256, before changing SMOKE_MC." >&2
+        exit 1
+        ;;
+esac
 
 # The adapter's last statement in start(MinecraftServer), identical on fabric/neoforge/forge and
 # — modulo Bukkit's own "[ChunkCarts] " log prefix, which the pattern is unanchored against — on
