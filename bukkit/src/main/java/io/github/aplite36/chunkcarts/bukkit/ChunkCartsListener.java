@@ -24,6 +24,7 @@ import org.bukkit.inventory.InventoryHolder;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
+import java.util.function.IntSupplier;
 
 /**
  * Turns server events into the three things {@code core} needs from the outside world: which carts
@@ -48,9 +49,17 @@ final class ChunkCartsListener implements Listener {
     /** Carts whose chunk is unloading, by the server tick it started on. */
     private final Map<UUID, Integer> unloading = new HashMap<>();
 
+    /** The server tick, read through here so a test can run the unload marks without a server. */
+    private final IntSupplier currentTick;
+
     ChunkCartsListener(ChunkCartsEngine engine, CartTracker tracker) {
+        this(engine, tracker, Bukkit::getCurrentTick);
+    }
+
+    ChunkCartsListener(ChunkCartsEngine engine, CartTracker tracker, IntSupplier currentTick) {
         this.engine = engine;
         this.tracker = tracker;
+        this.currentTick = currentTick;
     }
 
     /**
@@ -113,7 +122,7 @@ final class ChunkCartsListener implements Listener {
      */
     @EventHandler(priority = EventPriority.MONITOR)
     public void onEntitiesUnload(EntitiesUnloadEvent event) {
-        int now = Bukkit.getCurrentTick();
+        int now = currentTick.getAsInt();
         unloading.values().removeIf(tick -> now - tick > UNLOAD_MARK_TICKS);
         for (Entity entity : event.getEntities()) {
             if (entity instanceof Minecart cart) {
@@ -144,7 +153,7 @@ final class ChunkCartsListener implements Listener {
 
     private RemovalCause causeOf(Minecart cart, EntityRemoveFromWorldEvent event) {
         Integer markedAt = unloading.remove(cart.getUniqueId());
-        if (markedAt != null && Bukkit.getCurrentTick() - markedAt <= UNLOAD_MARK_TICKS) {
+        if (markedAt != null && currentTick.getAsInt() - markedAt <= UNLOAD_MARK_TICKS) {
             return RemovalCause.UNLOADED;
         }
         if (!cart.getWorld().equals(event.getWorld())) {
