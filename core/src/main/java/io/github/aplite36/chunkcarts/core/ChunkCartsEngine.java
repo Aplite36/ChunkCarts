@@ -431,7 +431,6 @@ public final class ChunkCartsEngine {
                     // longer needs.
                     journey.members.remove(cartId);
                     journeyByCart.remove(cartId);
-                    lastTermination.put(cartId, TerminationReason.DROPPED);
                 } else {
                     // Losing the lead ends the journey for the whole cluster, and ending it has to
                     // mean here what it means everywhere else: the survivors go back to DORMANT on
@@ -452,6 +451,12 @@ public final class ChunkCartsEngine {
             }
         }
         carts.remove(cartId);
+        // Both maps answer /chunkcarts why, which only asks about carts the tracker still has. An
+        // entry for a cart that is gone is never read: a destroyed cart never comes back, and an
+        // unloaded one is re-registered through restore and re-gated on the next poll. Kept, they
+        // grew by one entry for every cart that ever unloaded.
+        lastTermination.remove(cartId);
+        lastDenial.remove(cartId);
     }
 
     /** Releases every ticket and flushes state. Called on disable, or chunks leak until restart. */

@@ -96,7 +96,9 @@ public final class WhyReport {
         List<String> lines = new ArrayList<>();
         lines.add(String.format(Locale.ROOT, "%s at %s %d,%d,%d",
                 cart.type(), cart.world().value(),
-                (int) cart.x(), (int) cart.y(), (int) cart.z()));
+                // floor, not a cast: a cast rounds toward zero, so -0.5 printed as 0 and every
+                // negative coordinate named the block one step east or south of the cart.
+                (int) Math.floor(cart.x()), (int) Math.floor(cart.y()), (int) Math.floor(cart.z())));
 
         Optional<JourneySnapshot> journey = engine.journeyOf(cart.id());
         if (journey.isPresent()) {
