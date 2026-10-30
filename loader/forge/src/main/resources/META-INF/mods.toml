@@ -10,6 +10,17 @@ version = "${version}"
 displayName = "ChunkCarts"
 authors = "Aplite36"
 displayURL = "https://modrinth.com/mod/chunkcarts"
+# The README promises clients need nothing. Without this the field defaults to MATCH_VERSION,
+# which makes FML ask a connecting client for the same mod and mark the server incompatible in
+# the client's server list when it has not got it. Read off `ModContainer` in the fmlcore jar of
+# all fifteen targets — it pulls `displayTest` out of mods.toml, switches on MATCH_VERSION,
+# IGNORE_SERVER_VERSION, IGNORE_ALL_VERSION and NONE, falls back to MATCH_VERSION when the key is
+# absent, and throws "Invalid displayTest value supplied in mods.toml" on anything else. So the
+# spelling here is exact, not approximate.
+#
+# The `side = "SERVER"` keys below are on the dependency blocks and say something else entirely —
+# that *this mod's* dependencies are only needed server-side — so they do not cover this.
+displayTest = "IGNORE_SERVER_VERSION"
 description = '''
 Minecarts load chunks while travelling. Closed and looping tracks stop loading automatically, so
 carts cannot be turned into chunk loaders.

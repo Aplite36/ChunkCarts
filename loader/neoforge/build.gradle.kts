@@ -5,6 +5,9 @@ plugins {
     java
     id("dev.kikugie.stonecutter")
     id("net.neoforged.moddev") version "2.0.142"
+    // Applied for its relocator, not for its bundling — see the comment on shadowJar at the bottom
+    // of this file. Same version as the Bukkit module, the other place it is applied.
+    id("com.gradleup.shadow") version "9.6.1"
 }
 
 val mc = stonecutter.current.version
@@ -62,8 +65,12 @@ dependencies {
 
     // Bundled for the same reason as on Fabric: the config schema in core takes a nested map, and
     // a config.yml copied off a Paper server must parse identically rather than nearly so.
-    // NeoForge has no Jar-in-Jar equivalent that unpacks plain libraries, so this one is shaded
-    // into the jar below instead.
+    //
+    // Shaded and relocated rather than Jar-in-Jar'd. The claim that used to stand here — that
+    // NeoForge has no Jar-in-Jar equivalent — was wrong: MDG registers a `jarJar` task on every
+    // node of this branch. Relocation is the stronger answer regardless. Jar-in-Jar only
+    // reconciles the mods that opt into it, whereas relocating puts this copy of SnakeYAML
+    // somewhere no other mod can reach at all.
     implementation("org.yaml:snakeyaml:$snakeyamlVersion")
 }
 
@@ -81,14 +88,44 @@ tasks.processResources {
     from(rootProject.file("config.yml"))
 }
 
-// chunkcarts-<version>+<mcver>-neoforge.jar. core/ and SnakeYAML go in directly:
-// neither carries a Minecraft reference, and NeoForge does not remap.
+// The thin jar: an input to shadowJar, never shipped. Left enabled rather than disabled the way
+// the Bukkit module disables its own, because MDG hangs wiring off it. Its name is left at the
+// Gradle default — the node's own project name, e.g. `26.2-0.1.1-SNAPSHOT-thin.jar` — so that
+// build/libs holds exactly one `chunkcarts-*.jar`. CI globs for that name and hands the single
+// match to the metadata verifier; a second match would break it.
 tasks.jar {
-    from(bundled.elements.map { artifacts -> artifacts.map { zipTree(it.asFile) } }) {
-        exclude("META-INF/*.SF", "META-INF/*.DSA", "META-INF/*.RSA", "META-INF/maven/**",
-                "META-INF/MANIFEST.MF")
-    }
+    archiveClassifier = "thin"
+}
+
+// chunkcarts-<version>+<mcver>-neoforge.jar, the shipped artifact.
+//
+// Shadow rather than the plain `zipTree` unpack this used to be, for one reason. `zipTree` copies
+// entries verbatim, so SnakeYAML landed at `org/yaml/snakeyaml/**` under its own name. NeoForge
+// loads every mod into one class space and SnakeYAML is among the most commonly bundled libraries
+// in the ecosystem, so two mods shipping it unrelocated means a single copy wins for both.
+// ConfigFile calls `SafeConstructor(LoaderOptions)`, which only exists from 1.32 — an older winner
+// is a NoSuchMethodError at config load, and the mod that loses can just as easily be the other
+// one. Relocating rewrites references as well as paths, so there is nothing left to collide.
+//
+// core/ and metrics/ stay at their own names. Nobody else ships those packages, so there is
+// nothing to collide with; they are here because this is now the task that assembles the jar.
+tasks.shadowJar {
+    // Explicit, and load-bearing. Left at Shadow's default this is `runtimeClasspath`, which on
+    // this branch is NeoForge and the whole of Minecraft.
+    configurations.set(listOf(bundled))
+
+    relocate("org.yaml.snakeyaml", "io.github.aplite36.chunkcarts.shaded.snakeyaml")
+
+    // Shadow drops signature files on its own. The Maven descriptors it keeps, and they still name
+    // the library at the coordinates this relocation exists to get away from.
+    exclude("META-INF/maven/**")
+
     archiveBaseName = "chunkcarts"
     archiveVersion = "${project.version}+$mc-neoforge"
     archiveClassifier = ""
+}
+
+// `assemble` only knows about `jar`, and the thin jar is not the deliverable.
+tasks.build {
+    dependsOn(tasks.shadowJar)
 }

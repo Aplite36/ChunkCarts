@@ -9,6 +9,17 @@ version = "${version}"
 displayName = "ChunkCarts"
 authors = "Aplite36"
 displayURL = "https://modrinth.com/mod/chunkcarts"
+# Says a client without this mod may connect normally, which is what README.md promises.
+#
+# Inert on NeoForge as it stands, and kept anyway. `displayTest` appears nowhere in NeoForge
+# 26.2.0.32-beta, FancyModLoader 11.0.13 or the earlydisplay jar — grepped, not assumed — so
+# nothing reads it; NeoForge reworked connection negotiation in the 1.20.2+ line and lets a mod
+# that registers no network payloads through on its own, which ChunkCarts is. It is not rejected
+# either: neoforge.mods.toml is read key by key through NightConfig with no schema and no
+# unknown-key check, and a real 26.2 build confirms the jar packages and verifies with it present.
+# So it costs nothing today, states the intent in the one place a reader would look for it, and is
+# already correct if NeoForge adopts Forge's spelling later.
+displayTest = "IGNORE_SERVER_VERSION"
 description = '''
 Minecarts load chunks while travelling. Closed and looping tracks stop loading automatically, so
 carts cannot be turned into chunk loaders.

@@ -13,6 +13,9 @@ plugins {
     // Pinned rather than the MDK's own "[7.0.29,8.0)" range, because a version matrix that
     // silently changes its build plugin is not a matrix.
     id("net.minecraftforge.gradle") version "7.0.31"
+    // Applied for its relocator, not for its bundling — see the comment on shadowJar at the bottom
+    // of this file. Same version as the Bukkit module, the other place it is applied.
+    id("com.gradleup.shadow") version "9.6.1"
 }
 
 val mc = stonecutter.current.version
@@ -96,7 +99,8 @@ dependencies {
     // Bundled for the same reason as on the other two loaders: the config schema in core takes a
     // nested map, and a config.yml copied off a Paper server must parse identically rather than
     // nearly so. Shaded into the jar below rather than going through Forge's jarJar plugin, which
-    // would take over the jar task and the artifact name with it.
+    // would take over the jar task and the artifact name with it — and *relocated* on the way in,
+    // which jarJar would not do either. See the comment on shadowJar.
     implementation("org.yaml:snakeyaml:$snakeyamlVersion")
 
     bundled(project(":core"))
@@ -118,14 +122,47 @@ tasks.processResources {
     from(rootProject.file("config.yml"))
 }
 
-// chunkcarts-<version>+<mcver>-forge.jar. core/ and SnakeYAML go in directly:
-// neither carries a Minecraft reference, so there is nothing for FG7 to remap.
+// The thin jar: an input to shadowJar, never shipped. Its name is left at the Gradle default —
+// the node's own project name, e.g. `26.2-0.1.1-SNAPSHOT-thin.jar` — so that build/libs holds
+// exactly one `chunkcarts-*.jar`. CI globs for that name and hands the single match to the
+// metadata verifier, and the smoke test picks the server's mod jar out of the same directory the
+// same way; a second match would break both.
 tasks.jar {
-    from(bundled.elements.map { artifacts -> artifacts.map { zipTree(it.asFile) } }) {
-        exclude("META-INF/*.SF", "META-INF/*.DSA", "META-INF/*.RSA", "META-INF/maven/**",
-                "META-INF/MANIFEST.MF")
-    }
+    archiveClassifier = "thin"
+}
+
+// chunkcarts-<version>+<mcver>-forge.jar, the shipped artifact.
+//
+// Shadow rather than the plain `zipTree` unpack this used to be, for one reason. `zipTree` copies
+// entries verbatim, so SnakeYAML landed at `org/yaml/snakeyaml/**` under its own name. Forge loads
+// every mod into one class space and SnakeYAML is among the most commonly bundled libraries in the
+// ecosystem, so two mods shipping it unrelocated means a single copy wins for both. ConfigFile
+// calls `SafeConstructor(LoaderOptions)`, which only exists from 1.32 — an older winner is a
+// NoSuchMethodError at config load, and the mod that loses can just as easily be the other one.
+// Relocating rewrites references as well as paths, so there is nothing left to collide.
+//
+// Still not Forge's jarJar, for the reason given on the dependency above, and Shadow does not take
+// the artifact name the way jarJar would: `jar` keeps running under a name nothing globs for and
+// this task carries the shipped one. core/ and metrics/ ride along unrelocated — they are ours and
+// nobody else ships those packages — and neither they nor SnakeYAML carry a Minecraft reference,
+// so there is still nothing here for FG7 to remap.
+tasks.shadowJar {
+    // Explicit, and load-bearing. Left at Shadow's default this is `runtimeClasspath`, which on
+    // this branch is Forge and the whole of Minecraft.
+    configurations.set(listOf(bundled))
+
+    relocate("org.yaml.snakeyaml", "io.github.aplite36.chunkcarts.shaded.snakeyaml")
+
+    // Shadow drops signature files on its own. The Maven descriptors it keeps, and they still name
+    // the library at the coordinates this relocation exists to get away from.
+    exclude("META-INF/maven/**")
+
     archiveBaseName = "chunkcarts"
     archiveVersion = "${project.version}+$mc-forge"
     archiveClassifier = ""
+}
+
+// `assemble` only knows about `jar`, and the thin jar is not the deliverable.
+tasks.build {
+    dependsOn(tasks.shadowJar)
 }
