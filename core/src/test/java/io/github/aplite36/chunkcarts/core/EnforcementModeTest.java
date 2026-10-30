@@ -5,6 +5,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 import java.time.Duration;
+import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
@@ -35,6 +36,38 @@ class EnforcementModeTest extends EngineTest {
         assertNotEquals(TerminationReason.SLACK_EXHAUSTED,
                 engine().lastTermination(cart.id()).orElse(null),
                 "in PERMISSIVE, minecarts CAN be used as chunk loaders — that is the contract");
+    }
+
+    @Test
+    @DisplayName("PERMISSIVE mode still requires a departure token")
+    void permissiveModeStillRequiresDepartureToken() {
+        cfg.enforcement(EnforcementMode.PERMISSIVE);
+        FakeCart cart = FakeCart.at(OVERWORLD, 0, 0);
+
+        assertDenied(depart(cart), DenialReason.NO_TOKEN);
+    }
+
+    @Test
+    @DisplayName("PERMISSIVE mode still enforces the cooldown")
+    void permissiveModeStillEnforcesCooldown() {
+        cfg.enforcement(EnforcementMode.PERMISSIVE).journeyCooldown(Duration.ofMinutes(10));
+        FakeCart cart = FakeCart.at(OVERWORLD, 0, 0);
+        departWithToken(cart);
+        travelStraight(cart, 2);
+        engine().shutdown();
+
+        grantToken(cart);
+        assertDenied(depart(cart), DenialReason.COOLDOWN);
+    }
+
+    @Test
+    @DisplayName("PERMISSIVE mode still enforces the cart-type list")
+    void permissiveModeStillEnforcesCartTypeList() {
+        cfg.enforcement(EnforcementMode.PERMISSIVE);
+        FakeCart cart = FakeCart.at(OVERWORLD, 0, 0).type(CartType.SPAWNER);
+        grantToken(cart);
+
+        assertDenied(depart(cart), DenialReason.CART_TYPE_FORBIDDEN);
     }
 
     @Test
@@ -110,6 +143,62 @@ class EnforcementModeTest extends EngineTest {
 
         assertEquals(Duration.ofSeconds(5), resolved.config().journeyCooldown());
         assertTrue(resolved.warnings().stream().noneMatch(w -> w.contains("journey-cooldown")));
+    }
+
+    @Test
+    @DisplayName("STRICT clamps an absurd journey cooldown")
+    void strictModeClampsAbsurdJourneyCooldown() {
+        // The one duration with no ceiling. A cooldown of centuries is not a rate limit, it is a
+        // typo that retires every cart on the server.
+        var resolved = resolveStrict(Config.defaults().journeyCooldown(Duration.ofDays(3650)));
+
+        assertEquals(Config.STRICT_MAX_JOURNEY_COOLDOWN, resolved.config().journeyCooldown());
+        assertTrue(resolved.warnings().stream().anyMatch(w -> w.contains("journey-cooldown")));
+    }
+
+    @Test
+    @DisplayName("a region-radius of 0 is raised to the absolute floor in both modes")
+    void zeroRegionRadiusIsRaisedToFloorInBothModes() {
+        // At 0 a cart holds its own chunk and nothing else, so it stops at the first boundary it
+        // reaches; the drift leash tears apart any group straddling one; and the velocity clamp
+        // reads the zero margin as "poll as fast as possible" and pins the loop to a tick, while
+        // /chunkcarts list blames cart speed. Structural, so PERMISSIVE cannot opt out of it.
+        for (EnforcementMode mode : EnforcementMode.values()) {
+            var resolved = Config.defaults().enforcement(mode).regionRadius(0).build().resolve();
+
+            assertEquals(Config.MIN_REGION_RADIUS, resolved.config().regionRadius(),
+                    "region-radius 0 in " + mode);
+            assertTrue(resolved.warnings().stream().anyMatch(w -> w.contains("region-radius")),
+                    "and it warns in " + mode + ", the way the poll-interval floor does");
+        }
+    }
+
+    @Test
+    @DisplayName("counts that must be positive get a floor in both modes")
+    void nonPositiveCountsAreRaisedToTheirFloorInBothModes() {
+        // The other half of the truncation bug: nothing bounded these from below, so a wrapped or
+        // simply mistyped value went through. A budget of 0 or less ends every journey on its
+        // first check, 0 concurrent journeys refuses every departure on the server, and 0 slack
+        // calls the first curve in the track a loop. None of those is a permission to grant.
+        for (EnforcementMode mode : EnforcementMode.values()) {
+            var resolved = Config.defaults().enforcement(mode)
+                    .journeyBudgetChunks(-1)
+                    .progressSlackChunks(0)
+                    .maxConcurrentJourneys(0)
+                    .build().resolve();
+
+            assertEquals(Config.MIN_JOURNEY_BUDGET_CHUNKS, resolved.config().journeyBudgetChunks(),
+                    "journey-budget-chunks in " + mode);
+            assertEquals(Config.MIN_PROGRESS_SLACK_CHUNKS, resolved.config().progressSlackChunks(),
+                    "progress-slack-chunks in " + mode);
+            assertEquals(Config.MIN_CONCURRENT_JOURNEYS, resolved.config().maxConcurrentJourneys(),
+                    "max-concurrent-journeys in " + mode);
+            for (String key : List.of("journey-budget-chunks", "progress-slack-chunks",
+                    "max-concurrent-journeys")) {
+                assertTrue(resolved.warnings().stream().anyMatch(w -> w.contains(key)),
+                        key + " must warn in " + mode);
+            }
+        }
     }
 
     @Test

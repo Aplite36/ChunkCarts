@@ -86,9 +86,18 @@ public final class CartTracker {
      */
     public void untrack(UUID cartId) {
         if (tracked.remove(cartId) != null) {
-            engine.onCartRemoved(cartId);
+            engine.onCartRemoved(cartId, this::viewOrNull);
         }
         lastInteractor.remove(cartId);
+    }
+
+    /**
+     * A view of a cart the server still has, or null. Losing a cluster's lead ends the journey for
+     * the carts that outlive it, and the engine needs them in hand to write their state back.
+     */
+    private CartView viewOrNull(UUID cartId) {
+        AbstractMinecart cart = tracked.get(cartId);
+        return cart == null || cart.isRemoved() ? null : view(cart);
     }
 
     public void recordInteractor(UUID cartId, UUID player) {

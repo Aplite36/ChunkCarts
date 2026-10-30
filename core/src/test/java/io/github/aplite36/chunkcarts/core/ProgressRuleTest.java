@@ -122,4 +122,79 @@ class ProgressRuleTest extends EngineTest {
 
         assertTerminated(cart, TerminationReason.SLACK_EXHAUSTED);
     }
+
+    /** Moves the cart out {@code depth} chunks and back to the origin, {@code cycles} times. */
+    private void shuttle(FakeCart cart, int depth, int cycles) {
+        for (int cycle = 0; cycle < cycles; cycle++) {
+            for (int x = 1; x <= depth; x++) {
+                cart.atChunk(x, 0);
+                tickPoll(cart);
+            }
+            for (int x = depth - 1; x >= 0; x--) {
+                cart.atChunk(x, 0);
+                tickPoll(cart);
+            }
+        }
+    }
+
+    @Test
+    @DisplayName("a there-and-back shuttle expires — the far end is a record only once")
+    void shuttleExpiresAfterSlackExhausted() {
+        cfg.progressSlackChunks(16);
+        FakeCart cart = FakeCart.at(OVERWORLD, 0, 0);
+        departWithToken(cart);
+
+        // README:52 names this shape and invites readers to try it: "put the cart on a long
+        // there-and-back shuttle." The far end sets the distance record on the first outbound
+        // trip; every trip after that, in both directions, only spends slack.
+        shuttle(cart, 8, 5);
+
+        assertTerminated(cart, TerminationReason.SLACK_EXHAUSTED);
+        assertNoJourney(cart);
+    }
+
+    /**
+     * Moves the cart out {@code startDepth + cycle} chunks and back to the origin, so the far end
+     * advances by one chunk every cycle instead of staying fixed.
+     */
+    private void advancingShuttle(FakeCart cart, int startDepth, int cycles) {
+        for (int cycle = 0; cycle < cycles; cycle++) {
+            int far = startDepth + cycle;
+            for (int x = 1; x <= far; x++) {
+                cart.atChunk(x, 0);
+                tickPoll(cart);
+            }
+            for (int x = far - 1; x >= 0; x--) {
+                cart.atChunk(x, 0);
+                tickPoll(cart);
+            }
+        }
+    }
+
+    /**
+     * A shuttle whose far end creeps one chunk further every cycle sets a new distance record on
+     * every single lap, which resets {@code slackUsed} to zero before it can accrue. The slack
+     * rule alone would never fire here — this is the case where it is not sufficient by itself.
+     *
+     * <p>It cannot escape termination anyway, and this is the argument the whole guarantee rests
+     * on: beating the distance record means entering a chunk at a greater Chebyshev distance from
+     * the origin than any chunk visited so far, so that chunk is necessarily one the journey has
+     * not been charged for yet. A record advance therefore always costs budget. Budget is
+     * bounded, so records are finite, so slack eventually accrues without a reset and the journey
+     * dies — just by the other mechanism. Slack and budget cover for each other exactly here:
+     * slack catches a cart that is not progressing, budget catches one that is progressing
+     * without bound.
+     */
+    @Test
+    @DisplayName("an advancing shuttle still expires — budget catches what slack alone cannot")
+    void advancingShuttleExpiresAfterBudgetExhausted() {
+        cfg.progressSlackChunks(16).journeyBudgetChunks(8);
+        FakeCart cart = FakeCart.at(OVERWORLD, 0, 0);
+        departWithToken(cart);
+
+        advancingShuttle(cart, 1, 20);
+
+        assertTerminated(cart, TerminationReason.BUDGET_EXHAUSTED);
+        assertNoJourney(cart);
+    }
 }

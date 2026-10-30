@@ -69,7 +69,12 @@ jobs:
             scope="${{ inputs.scope || 'full' }}"
           fi
           echo "scope=$scope" >> "$GITHUB_OUTPUT"
-          echo "matrix=$(python3 .github/scripts/build_matrix.py --scope "$scope")" >> "$GITHUB_OUTPUT"
+          # Into a variable first, not straight into the echo. build_matrix.py reads the target
+          # list out of settings.gradle.kts and refuses to guess if that parse comes back empty,
+          # and `echo "matrix=$(...)"` would report echo's exit status instead of the script's —
+          # turning a refusal into an empty matrix and a build with nothing in it.
+          matrix=$(python3 .github/scripts/build_matrix.py --scope "$scope")
+          echo "matrix=$matrix" >> "$GITHUB_OUTPUT"
           {
             echo "### Loader targets: \`$scope\`"
             echo

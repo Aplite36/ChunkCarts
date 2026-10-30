@@ -1,6 +1,7 @@
 package io.github.aplite36.chunkcarts.fabric;
 
 import com.mojang.serialization.Codec;
+import com.mojang.serialization.DataResult;
 import io.github.aplite36.chunkcarts.loader.ChunkCarts;
 import io.github.aplite36.chunkcarts.loader.JourneyStore;
 import net.fabricmc.fabric.api.attachment.v1.AttachmentRegistry;
@@ -38,7 +39,31 @@ final class FabricJourneyStore implements JourneyStore {
             Identifier.fromNamespaceAndPath(ChunkCarts.MOD_ID, "journey"),
             //?} else
             /*ResourceLocation.fromNamespaceAndPath(ChunkCarts.MOD_ID, "journey"),*/
-            Codec.STRING.xmap(Base64.getDecoder()::decode, Base64.getEncoder()::encodeToString));
+            Codec.STRING.comapFlatMap(
+                    FabricJourneyStore::decodeBase64, Base64.getEncoder()::encodeToString));
+
+    /**
+     * {@code comapFlatMap} rather than {@code xmap}, because {@code xmap} does not capture
+     * exceptions into the {@link DataResult} — only {@code comapFlatMap} and {@code flatXmap} do.
+     * With {@code xmap} the {@link IllegalArgumentException} that {@code Base64.Decoder} throws on
+     * a payload that is not base64 propagates out of attachment deserialisation instead of becoming
+     * a decode error the platform reports and skips.
+     *
+     * <p>An error here is the same answer {@code JourneyCodec.decode} gives for bytes it cannot
+     * parse: discard rather than guess. The cart comes back with no attachment, which is DORMANT.
+     *
+     * <p>The message carries the length and not the payload — a corrupt attachment is exactly the
+     * case where the string could be arbitrarily long.
+     */
+    private static DataResult<byte[]> decodeBase64(String encoded) {
+        try {
+            return DataResult.success(Base64.getDecoder().decode(encoded));
+        } catch (IllegalArgumentException e) {
+            return DataResult.error(
+                    () -> "chunkcarts journey attachment is not base64 (" + encoded.length()
+                            + " chars); discarding");
+        }
+    }
 
     /**
      * The cast is not defensive: Fabric API mixes {@link AttachmentTarget} into {@code Entity} at
