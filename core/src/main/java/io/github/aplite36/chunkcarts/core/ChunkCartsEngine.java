@@ -80,6 +80,19 @@ public final class ChunkCartsEngine {
     private final Map<UUID, TerminationReason> lastTermination = new HashMap<>();
 
     /**
+     * Why each cart was last refused a departure, for {@code /chunkcarts why}.
+     *
+     * <p>{@code gate()} computes a {@link DenialReason} on every departure attempt and
+     * {@code CartTracker.tryDepartures} discarded it unless debug logging was on, so a station that
+     * had quietly stopped dispatching gave an admin a completely healthy-looking {@code list} and
+     * no way to find out why short of flooding the console for every cart on the server.
+     *
+     * <p>It stays current on its own: the tracker already runs the gates against every eligible
+     * cart on every poll.
+     */
+    private final Map<UUID, DenialReason> lastDenial = new HashMap<>();
+
+    /**
      * How many journeys currently want each chunk held. Two journeys' regions can overlap —
      * region-radius is per-cart, not per-journey, and nothing stops two carts on separate tracks
      * from passing within a few chunks of each other. Without a count, the first journey to stop
@@ -180,6 +193,7 @@ public final class ChunkCartsEngine {
         Objects.requireNonNull(lead, "lead");
         DenialReason denial = gate(lead);
         if (denial != null) {
+            lastDenial.put(lead.id(), denial);
             return new DepartureOutcome.Denied(denial);  // no token is spent on a denial
         }
 
@@ -212,6 +226,7 @@ public final class ChunkCartsEngine {
             state.lastJourneyStartedAt = now;    // the cooldown runs from start, not end
             state.cooldownWaiver = false;        // one interaction, one dispatch
             lastTermination.remove(member.id());
+            lastDenial.remove(member.id());   // it departed; whatever last refused it is stale
         }
         journeys.put(journey.id, journey);
 
@@ -270,6 +285,34 @@ public final class ChunkCartsEngine {
     /** Why this cart's most recent journey ended, if one has. */
     public Optional<TerminationReason> lastTermination(UUID cartId) {
         return Optional.ofNullable(lastTermination.get(cartId));
+    }
+
+    /**
+     * Why this cart was last refused a departure, if it has been, and if it is not travelling now.
+     *
+     * <p>A travelling cart's stored denial is whatever refused it before it left, which is not an
+     * answer to "why will this not depart" — it did.
+     */
+    public Optional<DenialReason> lastDenial(UUID cartId) {
+        return journeyByCart.containsKey(cartId)
+                ? Optional.empty()
+                : Optional.ofNullable(lastDenial.get(cartId));
+    }
+
+    /**
+     * How long until this cart's journey cooldown elapses, or empty if nothing is waiting on it.
+     *
+     * <p>{@code COOLDOWN} on its own is not an answer an admin can act on — "for another seven
+     * minutes" is the difference between waiting and going to look for a fault.
+     */
+    public Optional<Duration> cooldownRemaining(UUID cartId) {
+        CartState state = carts.get(cartId);
+        if (state == null || state.lastJourneyStartedAt == CartState.NEVER || state.cooldownWaiver) {
+            return Optional.empty();
+        }
+        long remaining = config.journeyCooldown().toMillis()
+                - (clock.nowMillis() - state.lastJourneyStartedAt);
+        return remaining > 0 ? Optional.of(Duration.ofMillis(remaining)) : Optional.empty();
     }
 
     /** Journeys occupying a concurrency slot. PAUSED and HOLDING count. */

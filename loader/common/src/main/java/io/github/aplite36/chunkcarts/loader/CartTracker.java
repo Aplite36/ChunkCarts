@@ -3,6 +3,7 @@ package io.github.aplite36.chunkcarts.loader;
 import io.github.aplite36.chunkcarts.core.ChunkCartsEngine;
 import io.github.aplite36.chunkcarts.core.DepartureOutcome;
 import io.github.aplite36.chunkcarts.core.TerminationReason;
+import io.github.aplite36.chunkcarts.core.WhyReport;
 import io.github.aplite36.chunkcarts.core.platform.CartView;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.MinecraftServer;
@@ -21,6 +22,7 @@ import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 
@@ -102,6 +104,41 @@ public final class CartTracker {
 
     public void recordInteractor(UUID cartId, UUID player) {
         lastInteractor.put(cartId, player);
+    }
+
+    /**
+     * Tracked carts within {@code range} of a player, in that player's level, for
+     * {@code /chunkcarts why}.
+     *
+     * <p>Read off {@code tracked} rather than queried from the level, because the answer wanted is
+     * "carts ChunkCarts knows about" — a cart it is not tracking has nothing to report — and
+     * because {@code AbstractMinecart} changed package in 1.21.11 and the preprocessor split for
+     * that already lives in this file.
+     */
+    public List<WhyReport.Candidate> candidatesNear(ServerPlayer player, double range) {
+        List<WhyReport.Candidate> near = new ArrayList<>();
+        double limit = range * range;
+        for (AbstractMinecart cart : tracked.values()) {
+            if (cart.isRemoved() || cart.level() != player.level()) {
+                continue;
+            }
+            double dx = cart.getX() - player.getX();
+            double dy = cart.getY() - player.getY();
+            double dz = cart.getZ() - player.getZ();
+            if (dx * dx + dy * dy + dz * dz <= limit) {
+                near.add(new WhyReport.Candidate(cart.getUUID(), cart.getX(), cart.getY(), cart.getZ()));
+            }
+        }
+        return near;
+    }
+
+    /**
+     * A core view of a tracked cart, for {@code /chunkcarts why}. Empty for a cart the mod is not
+     * tracking, which is the honest answer — it knows nothing about one.
+     */
+    public Optional<CartView> viewOf(UUID cartId) {
+        AbstractMinecart cart = tracked.get(cartId);
+        return cart == null ? Optional.empty() : Optional.of(view(cart));
     }
 
     LevelCartView view(AbstractMinecart cart) {
