@@ -41,6 +41,12 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   full help instead of a usage string, which was a second list of subcommands to forget to update.
 - Minecraft 26.3 support: Fabric (Fabric API 0.165.0+26.3), NeoForge (26.3.0.99) and Forge
   (66.1.2) jars for 26.3, and the Paper jar is now stated to cover 1.21 → 26.3.
+- `/chunkcarts list` rows can be clicked to teleport to the journey. A row already said where the
+  cluster was, and going to look still meant typing the coordinates out by hand. Clicking runs
+  `/execute in <dimension> run tp @s <x> ~ <z>` to the row's `near` position, keeping your current
+  height, and hovering says so. It is offered only to players who could run that teleport
+  themselves (`minecraft.command.execute` and `minecraft.command.teleport` on Paper, gamemaster
+  level on the loaders); everyone else, the console included, gets the same plain text as before.
 
 ### Changed
 

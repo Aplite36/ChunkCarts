@@ -99,7 +99,7 @@ One permission, `chunkcarts.admin`, which operators have by default. `/ccarts` w
 
 | Command | What it does |
 | --- | --- |
-| `/chunkcarts list` | Active journeys, and exactly which chunks are held and why |
+| `/chunkcarts list` | Active journeys, and exactly which chunks are held and why. In game, click a row to teleport to it |
 | `/chunkcarts reload` | Re-read `config.yml`; running journeys are not interrupted |
 | `/chunkcarts debug` | Toggle per-poll logging, so you can watch a journey decide |
 | `/chunkcarts why` | Run in game, looking at a cart: why it stopped, or why it will not depart |
