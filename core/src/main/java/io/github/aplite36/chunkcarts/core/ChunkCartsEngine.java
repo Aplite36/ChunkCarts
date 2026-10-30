@@ -157,7 +157,14 @@ public final class ChunkCartsEngine {
             return;  // not DORMANT; a travelling cart cannot be earning its next token
         }
         if (world.isPlayerLoaded(cart.world(), chunkX(cart), chunkZ(cart))) {
-            cartState(cart.id()).token = true;
+            CartState state = cartState(cart.id());
+            if (!state.token) {
+                state.token = true;
+                // Written on the grant, not left for the departure flush. A token that lived only
+                // here was lost to /chunkcarts reload, which builds a new engine, and to the cart's
+                // chunk unloading, while the cart sat waiting for the cooldown to let it go.
+                flushDormant(cart);
+            }
         }
     }
 
@@ -169,12 +176,19 @@ public final class ChunkCartsEngine {
     /**
      * Records something that happened to a cart. Only some events count as interaction for the
      * cooldown waiver — see {@link CartEvent}.
+     *
+     * <p>Takes the cart rather than its id because the interaction is written to it at once, for
+     * the same reason {@link #observe} writes a token: the waiver is unspent until the next
+     * departure, and until then the cart is the only place it can outlive this engine. On disk it
+     * is the interaction stamp, which {@link #restore} turns back into the flag.
      */
-    public void record(UUID cartId, CartEvent event) {
+    public void record(CartView cart, CartEvent event) {
+        Objects.requireNonNull(cart, "cart");
         if (event.isInteraction()) {
-            CartState state = cartState(cartId);
+            CartState state = cartState(cart.id());
             state.lastInteractionAt = clock.nowMillis();
             state.cooldownWaiver = true;
+            persist(cart);
         }
     }
 
@@ -465,8 +479,10 @@ public final class ChunkCartsEngine {
         holdCounts.clear();
         journeys.clear();
         journeyByCart.clear();
-        // The per-cart registry survives: cooldowns and interaction stamps are wall-clock and must
-        // not be forgotten by a reload.
+        // The per-cart registry does not survive this: every adapter builds a new engine on reload,
+        // and this one is dropped. What it held is on the carts already. Tokens and interactions
+        // are written when they are granted, departures and journey state by flush, and the new
+        // engine reads all of it back through restore as it tracks the carts in loaded chunks.
     }
 
     // ---- departure gates, cheapest first -------------------------------------------------------
@@ -920,6 +936,21 @@ public final class ChunkCartsEngine {
             member.writeState(codec.encode(journey.toRecord(state.token,
                     state.lastJourneyStartedAt, state.lastInteractionAt)));
         }
+    }
+
+    /** Writes one cart's state to it, as part of its journey if it has one. */
+    private void persist(CartView cart) {
+        UUID journeyId = journeyByCart.get(cart.id());
+        Journey journey = journeyId == null ? null : journeys.get(journeyId);
+        if (journey == null) {
+            flushDormant(cart);
+            return;
+        }
+        // One member, so not flush(): that also restarts the journey's flush timer, which would
+        // leave the rest of the cluster up to a full interval staler than it should be.
+        CartState state = cartState(cart.id());
+        cart.writeState(codec.encode(journey.toRecord(state.token,
+                state.lastJourneyStartedAt, state.lastInteractionAt)));
     }
 
     private void flushDormant(CartView cart) {

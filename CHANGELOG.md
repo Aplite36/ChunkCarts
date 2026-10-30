@@ -158,6 +158,12 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   minimum is now 1, in both enforcement modes, and a lower value is raised with a warning.
 - `/chunkcarts why` now gives the right block for a cart at a negative coordinate. The position
   was rounded toward zero, so a cart at x -0.5 was reported at 0, one block east of where it was.
+- `/chunkcarts reload` no longer throws away departure tokens and cooldown waivers. Both lived only
+  in memory, and every reload builds a new engine, so a cart that had been seen by a player and was
+  waiting out its cooldown lost its token, and a player's right-click no longer waived the cooldown
+  for the next dispatch. Both are now written to the cart when they are granted, and the reload
+  reads them back along with running journeys, which already survived it. The same write keeps a
+  token when a waiting cart's chunk unloads, or the server restarts, before it departs.
 
 ## [0.1.0] - 2026-07-27
 

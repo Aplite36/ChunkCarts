@@ -420,7 +420,7 @@ public final class ChunkCartsNeoForge implements ChunkCartsMod {
             return;
         }
         tracker.recordInteractor(cart.getUUID(), event.getEntity().getUUID());
-        engine.record(cart.getUUID(),
+        tracker.record(cart,
                 cart instanceof Container ? CartEvent.INVENTORY_OPEN : CartEvent.RIGHT_CLICK);
     }
 
@@ -461,7 +461,7 @@ public final class ChunkCartsNeoForge implements ChunkCartsMod {
             return;
         }
         tracker.recordInteractor(cart.getUUID(), placement.player());
-        engine.record(cart.getUUID(), CartEvent.PLACEMENT);
+        tracker.record(cart, CartEvent.PLACEMENT);
     }
 
     private static String modVersion() {

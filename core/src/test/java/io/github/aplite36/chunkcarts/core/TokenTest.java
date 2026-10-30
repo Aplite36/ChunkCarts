@@ -157,7 +157,7 @@ class TokenTest extends EngineTest {
         engine().shutdown();
 
         clock.advance(Duration.ofSeconds(30));
-        engine().record(cart.id(), CartEvent.RIGHT_CLICK);
+        engine().record(cart, CartEvent.RIGHT_CLICK);
 
         // "Stop the cart, reload it, send it off again" is the most legitimate action possible,
         // and a ten-minute lockout on it is pure friction.
@@ -215,7 +215,7 @@ class TokenTest extends EngineTest {
         departWithToken(cart);
         engine().shutdown();
 
-        engine().record(cart.id(), CartEvent.RIGHT_CLICK);
+        engine().record(cart, CartEvent.RIGHT_CLICK);
         grantToken(cart);
         assertDeparted(depart(cart));
         engine().shutdown();
