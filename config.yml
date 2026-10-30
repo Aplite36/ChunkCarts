@@ -23,16 +23,17 @@ config-version: 1
 
 # The master switch for the anti-abuse rules.
 #
-#   STRICT      Loop detection, travel budget, and departure tokens are all
-#               enforced. A cart on a closed or looping track stops loading
-#               chunks automatically. Cannot be used as a chunk loader.
+#   STRICT      Loop detection and the travel budget are enforced, and the
+#               STRICT caps on individual settings below apply. A cart on a
+#               closed or looping track stops loading chunks automatically.
+#               Cannot be used as a chunk loader.
 #               [default]
 #
 #   PERMISSIVE  Loop detection and the travel budget are switched off, so a
 #               cart on a closed track keeps loading chunks indefinitely.
-#               Everything else still applies. Departure tokens, the
-#               cooldown, the concurrency cap and the cart-type list are
-#               unchanged.
+#               Departure tokens, the cooldown, the concurrency cap and the
+#               cart-type list still apply, but the STRICT caps on individual
+#               settings are lifted and unload-hold is honoured.
 #
 #               >>> In PERMISSIVE mode, minecarts CAN be used as chunk
 #               >>> loaders. A player can park a cart on a small loop of
