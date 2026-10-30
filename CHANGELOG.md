@@ -7,6 +7,15 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- `/chunkcarts help`, on every platform, listing each subcommand and what it is for rather than
+  just naming them. There was no help before, and what an unrecognised word did depended on which
+  jar you had installed: Paper printed a usage line for anything it did not recognise, so
+  `/chunkcarts help` happened to work, while Brigadier answered the same guess on Fabric, NeoForge
+  and Forge with "Unknown or incomplete command". Paper now answers an unknown subcommand with the
+  full help instead of a usage string, which was a second list of subcommands to forget to update.
+
 ### Changed
 
 - The AFK-dispenser guard is now documented as what it is. `CartEvent` carried `HOPPER_INSERT`,
