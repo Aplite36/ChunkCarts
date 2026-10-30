@@ -5,15 +5,19 @@ import com.mojang.brigadier.arguments.IntegerArgumentType;
 import com.mojang.brigadier.builder.LiteralArgumentBuilder;
 import com.mojang.brigadier.tree.CommandNode;
 import io.github.aplite36.chunkcarts.core.ChunkCartsEngine;
+import io.github.aplite36.chunkcarts.core.ChunkPos;
 import io.github.aplite36.chunkcarts.core.CommandHelp;
 import io.github.aplite36.chunkcarts.core.ConfigSwap;
 import io.github.aplite36.chunkcarts.core.JourneySnapshot;
+import io.github.aplite36.chunkcarts.core.ListTeleport;
 import io.github.aplite36.chunkcarts.core.WhyReport;
 import io.github.aplite36.chunkcarts.core.platform.CartView;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
 import net.minecraft.ChatFormatting;
+import net.minecraft.network.chat.ClickEvent;
 import net.minecraft.network.chat.Component;
+import net.minecraft.network.chat.HoverEvent;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.phys.Vec3;
 import net.minecraft.network.chat.MutableComponent;
@@ -61,6 +65,19 @@ public final class ChunkCartsCommand {
                     || source.permissions().hasPermission(Permissions.COMMANDS_GAMEMASTER);
     //?} else
     /*private static final Predicate<CommandSourceStack> IS_ADMIN = source -> source.hasPermission(2);*/
+
+    /**
+     * Whether the sender could run the teleport a {@code list} row offers. {@code execute} and
+     * {@code tp} both sit at gamemaster, and {@link #IS_ADMIN} can pass on the ChunkCarts atom
+     * alone, so being allowed {@code /chunkcarts} does not imply this. The console and command
+     * blocks have the level but no chat to click in, so they need a player too.
+     */
+    //? if >=1.21.11 {
+    private static final Predicate<CommandSourceStack> CAN_TELEPORT = source ->
+            source.getPlayer() != null
+                    && source.permissions().hasPermission(Permissions.COMMANDS_GAMEMASTER);
+    //?} else
+    /*private static final Predicate<CommandSourceStack> CAN_TELEPORT = source -> source.getPlayer() != null && source.hasPermission(2);*/
 
     private final ChunkCartsMod mod;
 
@@ -189,7 +206,7 @@ public final class ChunkCartsCommand {
 
         int from = (shown - 1) * PAGE_SIZE;
         for (JourneySnapshot journey : journeys.subList(from, Math.min(from + PAGE_SIZE, journeys.size()))) {
-            send(source, row(journey));
+            sendRow(source, journey);
         }
         if (shown < pages) {
             send(source, "  ... /chunkcarts list " + (shown + 1) + " for the next "
@@ -214,6 +231,35 @@ public final class ChunkCartsCommand {
                 journey.origin().world().value(), journey.origin().cx() * 16,
                 journey.origin().cz() * 16, journey.distanceRecord(),
                 journey.slackUsed(), journey.budgetRemaining());
+    }
+
+    /**
+     * The row, clickable for a player who could have typed the teleport themselves. Everyone else,
+     * the console included, gets exactly the line {@link #send} always sent.
+     *
+     * <p>The world id on the loaders is already the dimension key, so it goes into
+     * {@code execute in} as it is.
+     */
+    private static void sendRow(CommandSourceStack source, JourneySnapshot journey) {
+        String text = row(journey);
+        if (!CAN_TELEPORT.test(source) || journey.approximateChunk().isEmpty()) {
+            send(source, text);
+            return;
+        }
+        ChunkPos chunk = journey.approximateChunk().get();
+        String command = ListTeleport.command(chunk.world().value(), chunk);
+        Component hover = Component.literal(ListTeleport.hover(chunk));
+        // 1.21.5 turned both events into one record per action, and the action enum went with them.
+        //? if >=1.21.5 {
+        ClickEvent click = new ClickEvent.RunCommand(command);
+        HoverEvent hint = new HoverEvent.ShowText(hover);
+        //?} else {
+        /*ClickEvent click = new ClickEvent(ClickEvent.Action.RUN_COMMAND, command);
+        HoverEvent hint = new HoverEvent(HoverEvent.Action.SHOW_TEXT, hover);
+        *///?}
+        Component line = Component.literal("[ChunkCarts] " + text)
+                .withStyle(style -> style.withClickEvent(click).withHoverEvent(hint));
+        source.sendSuccess(() -> line, false);
     }
 
     private static String tps(ChunkCartsEngine engine) {

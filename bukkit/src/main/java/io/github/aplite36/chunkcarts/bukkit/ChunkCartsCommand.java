@@ -4,11 +4,16 @@ import io.github.aplite36.chunkcarts.core.ChunkCartsEngine;
 import io.github.aplite36.chunkcarts.core.CommandHelp;
 import io.github.aplite36.chunkcarts.core.ConfigSwap;
 import io.github.aplite36.chunkcarts.core.JourneySnapshot;
+import io.github.aplite36.chunkcarts.core.ListTeleport;
 import io.github.aplite36.chunkcarts.core.WhyReport;
 import io.github.aplite36.chunkcarts.core.platform.CartView;
 import net.kyori.adventure.text.Component;
+import net.kyori.adventure.text.event.ClickEvent;
+import net.kyori.adventure.text.event.HoverEvent;
 import net.kyori.adventure.text.format.NamedTextColor;
+import org.bukkit.Bukkit;
 import org.bukkit.Location;
+import org.bukkit.World;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandExecutor;
 import org.bukkit.command.CommandSender;
@@ -150,7 +155,7 @@ final class ChunkCartsCommand implements CommandExecutor, TabCompleter {
         int from = (shown - 1) * PAGE_SIZE;
         for (JourneySnapshot journey : journeys.subList(from,
                 Math.min(from + PAGE_SIZE, journeys.size()))) {
-            sender.sendMessage(row(journey));
+            sendRow(sender, journey);
         }
         if (shown < pages) {
             sender.sendMessage("[ChunkCarts]   ... /chunkcarts list " + (shown + 1)
@@ -175,6 +180,36 @@ final class ChunkCartsCommand implements CommandExecutor, TabCompleter {
                 journey.origin().world().value(), journey.origin().cx() * 16,
                 journey.origin().cz() * 16, journey.distanceRecord(),
                 journey.slackUsed(), journey.budgetRemaining());
+    }
+
+    /**
+     * The row, clickable for a player who could have typed the teleport themselves. Everyone else,
+     * the console included, gets exactly the string they always did.
+     *
+     * <p>The two vanilla permissions rather than {@code chunkcarts.admin}: the click runs
+     * {@code execute} and {@code tp} as the player, so offering it to someone without them would
+     * only hand them an error. The world is looked up for its dimension key because the world id
+     * on this platform is the folder name, which {@code execute in} does not take; a world that
+     * has since been unloaded gets no click rather than a broken one.
+     */
+    private static void sendRow(CommandSender sender, JourneySnapshot journey) {
+        String text = row(journey);
+        Optional<Component> clickable = journey.approximateChunk()
+                .filter(chunk -> sender instanceof Player
+                        && sender.hasPermission("minecraft.command.execute")
+                        && sender.hasPermission("minecraft.command.teleport"))
+                .flatMap(chunk -> Optional.ofNullable(Bukkit.getWorld(chunk.world().value()))
+                        .map(World::getKey)
+                        .map(key -> Component.text(text)
+                                .clickEvent(ClickEvent.runCommand(
+                                        ListTeleport.command(key.asString(), chunk)))
+                                .hoverEvent(HoverEvent.showText(
+                                        Component.text(ListTeleport.hover(chunk))))));
+        if (clickable.isPresent()) {
+            sender.sendMessage(clickable.get());
+        } else {
+            sender.sendMessage(text);
+        }
     }
 
     private static String tps(ChunkCartsEngine engine) {
