@@ -4,9 +4,12 @@ import io.github.aplite36.chunkcarts.core.fake.FakeCart;
 import io.github.aplite36.chunkcarts.core.fake.FakeChunkTicketBackend;
 import io.github.aplite36.chunkcarts.core.fake.FakeClock;
 import io.github.aplite36.chunkcarts.core.fake.FakeWorldQuery;
+import io.github.aplite36.chunkcarts.core.platform.CartView;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -28,6 +31,7 @@ abstract class EngineTest {
     final FakeClock clock = new FakeClock();
     final FakeWorldQuery world = new FakeWorldQuery();
     final FakeChunkTicketBackend tickets = new FakeChunkTicketBackend();
+    final JourneyCodec codec = new JourneyCodec();
 
     Config.Builder cfg = Config.defaults();
 
@@ -128,6 +132,21 @@ abstract class EngineTest {
         return path;
     }
 
+    // ---- removal ------------------------------------------------------------------------------
+
+    /**
+     * Removes a cart, telling the engine which carts the server still has. The survivors matter:
+     * losing a cluster's lead ends the journey for the rest of it, and ending a journey means
+     * writing state back to the carts left behind.
+     */
+    void removeCart(FakeCart removed, FakeCart... remaining) {
+        Map<UUID, CartView> views = new HashMap<>();
+        for (FakeCart cart : remaining) {
+            views.put(cart.id(), cart);
+        }
+        engine().onCartRemoved(removed.id(), views::get);
+    }
+
     // ---- assertions on journey state ----------------------------------------------------------
 
     JourneySnapshot journeyOf(FakeCart cart) {
@@ -147,5 +166,19 @@ abstract class EngineTest {
 
     void assertState(FakeCart cart, JourneyState expected) {
         assertEquals(expected, journeyOf(cart).state());
+    }
+
+    /**
+     * What is actually on the entity right now, which is the source of truth persistence cares
+     * about.
+     */
+    JourneyRecord persisted(FakeCart cart) {
+        return cart.readState().flatMap(codec::decode)
+                .orElseThrow(() -> new AssertionError("expected persisted state on " + cart.id()));
+    }
+
+    /** A second engine over the same carts: what a restart or {@code /chunkcarts reload} does. */
+    ChunkCartsEngine restarted() {
+        return new ChunkCartsEngine(config(), world, tickets, clock);
     }
 }

@@ -3,9 +3,12 @@ package io.github.aplite36.chunkcarts.core;
 import io.github.aplite36.chunkcarts.core.fake.FakeCart;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 
 import java.time.Duration;
 import java.util.EnumSet;
+import java.util.List;
 import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -73,6 +76,35 @@ class GatesTest extends EngineTest {
         grantToken(cart);
 
         assertDenied(depart(cart), DenialReason.CART_TYPE_FORBIDDEN);
+    }
+
+    @ParameterizedTest(name = "a {0} cart is left behind when its neighbour departs")
+    @EnumSource(value = CartType.class, names = {"TNT", "COMMAND_BLOCK", "SPAWNER"})
+    @DisplayName("a forbidden cart type cannot ride along in someone else's cluster")
+    void forbiddenTypeIsNotSweptIntoACluster(CartType forbidden) {
+        // Gate 2 is checked against the lead. A cluster's other members arrive as contacts from the
+        // adapter, so without a check here a TNT cart parked against a chest cart departs with it:
+        // it joins the members, its region is held, and it is carried the whole route — the thing
+        // config.yml says can never happen, reached by standing next to a cart that can.
+        cfg.allowedCartTypes(EnumSet.allOf(CartType.class)).regionRadius(1);
+        FakeCart lead = FakeCart.at(OVERWORLD, 0, 0).atBlock(8, 8);
+        FakeCart neighbour = new FakeCart(OVERWORLD).atBlock(9, 8).type(forbidden);
+        grantToken(lead);
+
+        assertDeparted(engine().tryDepart(lead, List.of(lead, neighbour)));
+
+        assertEquals(1, journeyOf(lead).cartCount(), forbidden + " must not join the cluster");
+        assertNoJourney(neighbour);
+
+        // And it stays behind: the cluster leaves without it rather than towing it along.
+        for (int i = 0; i < 3; i++) {
+            lead.atChunk(lead.chunkX() + 1, lead.chunkZ());
+            tickPoll(lead, neighbour);
+        }
+        assertNoJourney(neighbour);
+        assertFalse(journeyOf(lead).heldChunks().contains(
+                        new ChunkPos(OVERWORLD, neighbour.chunkX(), neighbour.chunkZ())),
+                "no chunk should be held on a forbidden cart's behalf");
     }
 
     @Test

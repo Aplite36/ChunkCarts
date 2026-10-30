@@ -86,8 +86,12 @@ class TokenTest extends EngineTest {
     @Test
     @DisplayName("a denied departure leaves the token intact")
     void deniedDepartureDoesNotConsumeToken() {
-        cfg.maxConcurrentJourneys(0);
-        FakeCart cart = FakeCart.at(OVERWORLD, 0, 0);
+        // Filling a cap of 1, rather than setting the cap to 0: 0 refuses every departure on the
+        // server, so resolve() now raises it to the floor. See Config.MIN_CONCURRENT_JOURNEYS.
+        cfg.maxConcurrentJourneys(1);
+        departWithToken(FakeCart.at(OVERWORLD, 0, 0));
+
+        FakeCart cart = FakeCart.at(OVERWORLD, 40, 0);
         grantToken(cart);
 
         assertDenied(depart(cart), DenialReason.CONCURRENCY_CAP);

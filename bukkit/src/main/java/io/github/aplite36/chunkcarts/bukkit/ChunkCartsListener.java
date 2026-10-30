@@ -5,6 +5,7 @@ import io.github.aplite36.chunkcarts.core.CartEvent;
 import io.github.aplite36.chunkcarts.core.ChunkCartsEngine;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.Minecart;
+import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
@@ -64,12 +65,27 @@ final class ChunkCartsListener implements Listener {
         }
     }
 
+    /**
+     * {@code getPlayer()} is {@code @Nullable} on this event — both its constructors take a nullable
+     * player and {@code CraftEventFactory.callEntityPlaceEvent} branches on it — so it is checked
+     * rather than dereferenced. No call site that actually passes null has been identified; the
+     * guard is here because this is a {@code MONITOR} handler on the entity-placement path, where an
+     * NPE escapes into Bukkit's dispatch and the cart is left tracked but unattributed.
+     *
+     * <p>Without a player the {@code PLACEMENT} record is skipped too, not just the attribution.
+     * {@code PLACEMENT} waives the journey cooldown, and a placement nobody performed should not
+     * waive anything. The cart is still tracked, which is what {@link #onVehicleCreate} would have
+     * done for it anyway.
+     */
     @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
     public void onEntityPlace(EntityPlaceEvent event) {
         if (event.getEntity() instanceof Minecart cart) {
             tracker.track(cart);
-            tracker.recordInteractor(cart.getUniqueId(), event.getPlayer().getUniqueId());
-            engine.record(cart.getUniqueId(), CartEvent.PLACEMENT);
+            Player placer = event.getPlayer();
+            if (placer != null) {
+                tracker.recordInteractor(cart.getUniqueId(), placer.getUniqueId());
+                engine.record(cart.getUniqueId(), CartEvent.PLACEMENT);
+            }
         }
     }
 
