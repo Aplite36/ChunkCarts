@@ -16,9 +16,9 @@ import java.util.Set;
  * <p>What is sent is decided here and nowhere else, in three places: {@link #appendPlatformData}
  * and {@link #appendServiceData} produce the payload's own fields, and {@link #customCharts} adds
  * the custom-chart values on top. The README's Metrics section promises a specific field set, and
- * {@code ChunkCartsMetricsTest} pins all three paths against {@link #DISCLOSED_PLATFORM_FIELDS} and
- * the custom-chart ids, so adding a field or a chart means changing the README and the test in the
- * same commit.
+ * {@code ChunkCartsMetricsTest} pins all three paths, and {@link #DISCLOSED_PLATFORM_FIELDS}, against
+ * literal copies of that field set and the custom-chart ids, so adding a field or a chart fails the
+ * build until the test's lists are edited too, which is the reminder to change the README.
  *
  * <p>Two opt-outs, both honoured. The server owner's global bStats switch lives in bStats' own
  * config file and is read into {@link BStatsSettings#enabled()}; ChunkCarts' own {@code metrics}
@@ -131,9 +131,9 @@ public final class ChunkCartsMetrics {
 
     /**
      * The exact keys {@link #appendPlatformData} writes, matching the "Metrics" section of the
-     * README field for field. {@code ChunkCartsMetricsTest} asserts the payload against this
-     * constant instead of a copy of the list, so a field can only be added here by also adding it
-     * there and to the README.
+     * README field for field. {@code ChunkCartsMetricsTest} asserts both the payload and this
+     * constant against its own literal copy of the README's list, so a field added here and to
+     * {@link #appendPlatformData} together still fails the build until the test's copy is edited.
      */
     static final Set<String> DISCLOSED_PLATFORM_FIELDS = Set.of(
             "playerAmount", "onlineMode", "bukkitVersion", "bukkitName",

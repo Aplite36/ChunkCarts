@@ -22,12 +22,21 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  *
  * <p>The README promises a specific list of what leaves a server. That promise is only worth
  * anything if adding a field or a chart to the payload breaks the build, so these tests pin the
- * payload against {@link ChunkCartsMetrics#DISCLOSED_PLATFORM_FIELDS} rather than a copy of the
- * list, and pin the custom-chart ids alongside it, covering all three paths the class doc for
- * {@link ChunkCartsMetrics} describes. A new field or chart means editing this test, which means
- * editing the README in the same commit.
+ * payload, and {@link ChunkCartsMetrics#DISCLOSED_PLATFORM_FIELDS}, against a literal copy of the
+ * README's list, and pin the custom-chart ids alongside it, covering all three paths the class doc
+ * for {@link ChunkCartsMetrics} describes. A new field or chart fails the build until this test's
+ * literal lists are edited, which is the prompt to edit the README in the same commit.
  */
 class ChunkCartsMetricsTest {
+
+    /**
+     * The per-server fields the README's "Metrics" section names, restated here on purpose: if the
+     * test read {@link ChunkCartsMetrics#DISCLOSED_PLATFORM_FIELDS} instead, a field added to the
+     * payload and the constant together would pass without anyone touching the README.
+     */
+    private static final Set<String> DISCLOSED_IN_README = Set.of(
+            "playerAmount", "onlineMode", "bukkitVersion", "bukkitName",
+            "javaVersion", "osName", "osArch", "osVersion", "coreCount");
 
     /** Answers with values that are obviously test data, so a leak into the payload is visible. */
     private static final class FakePlatform implements MetricsPlatform {
@@ -78,9 +87,13 @@ class ChunkCartsMetricsTest {
     @Test
     @DisplayName("the per-server payload contains exactly the disclosed fields")
     void platformPayloadFieldsAreExactlyTheDisclosedOnes() {
-        assertEquals(
-                ChunkCartsMetrics.DISCLOSED_PLATFORM_FIELDS,
-                keysOf(platformJson(new FakePlatform())));
+        assertEquals(DISCLOSED_IN_README, keysOf(platformJson(new FakePlatform())));
+    }
+
+    @Test
+    @DisplayName("the disclosed-fields constant matches the README's list")
+    void disclosedFieldsConstantMatchesTheReadme() {
+        assertEquals(DISCLOSED_IN_README, ChunkCartsMetrics.DISCLOSED_PLATFORM_FIELDS);
     }
 
     @Test
