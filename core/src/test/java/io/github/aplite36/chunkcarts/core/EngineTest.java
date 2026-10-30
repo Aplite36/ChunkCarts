@@ -135,16 +135,20 @@ abstract class EngineTest {
     // ---- removal ------------------------------------------------------------------------------
 
     /**
-     * Removes a cart, telling the engine which carts the server still has. The survivors matter:
-     * losing a cluster's lead ends the journey for the rest of it, and ending a journey means
+     * Destroys a cart, telling the engine which carts the server still has. The survivors matter:
+     * destroying a cluster's lead ends the journey for the rest of it, and ending a journey means
      * writing state back to the carts left behind.
      */
     void removeCart(FakeCart removed, FakeCart... remaining) {
+        removeCart(RemovalCause.DESTROYED, removed, remaining);
+    }
+
+    void removeCart(RemovalCause cause, FakeCart removed, FakeCart... remaining) {
         Map<UUID, CartView> views = new HashMap<>();
         for (FakeCart cart : remaining) {
             views.put(cart.id(), cart);
         }
-        engine().onCartRemoved(removed.id(), views::get);
+        engine().onCartRemoved(removed.id(), cause, views::get);
     }
 
     // ---- assertions on journey state ----------------------------------------------------------
