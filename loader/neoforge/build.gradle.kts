@@ -4,7 +4,7 @@
 plugins {
     java
     id("dev.kikugie.stonecutter")
-    id("net.neoforged.moddev") version "2.0.142"
+    id("net.neoforged.moddev") version "2.0.148"
     // Applied for its relocator, not for its bundling — see the comment on shadowJar at the bottom
     // of this file. Same version as the Bukkit module, the other place it is applied.
     id("com.gradleup.shadow") version "9.6.1"
