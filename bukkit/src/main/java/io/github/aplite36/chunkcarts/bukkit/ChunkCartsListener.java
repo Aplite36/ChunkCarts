@@ -110,7 +110,7 @@ final class ChunkCartsListener implements Listener {
             Player placer = event.getPlayer();
             if (placer != null) {
                 tracker.recordInteractor(cart.getUniqueId(), placer.getUniqueId());
-                engine.record(cart.getUniqueId(), CartEvent.PLACEMENT);
+                engine.record(tracker.view(cart), CartEvent.PLACEMENT);
             }
         }
     }
@@ -166,7 +166,7 @@ final class ChunkCartsListener implements Listener {
     public void onInteract(PlayerInteractEntityEvent event) {
         if (event.getRightClicked() instanceof Minecart cart) {
             tracker.recordInteractor(cart.getUniqueId(), event.getPlayer().getUniqueId());
-            engine.record(cart.getUniqueId(), CartEvent.RIGHT_CLICK);
+            engine.record(tracker.view(cart), CartEvent.RIGHT_CLICK);
         }
     }
 
@@ -180,7 +180,7 @@ final class ChunkCartsListener implements Listener {
         InventoryHolder holder = event.getInventory().getHolder();
         if (holder instanceof Minecart cart) {
             tracker.recordInteractor(cart.getUniqueId(), event.getPlayer().getUniqueId());
-            engine.record(cart.getUniqueId(), CartEvent.INVENTORY_OPEN);
+            engine.record(tracker.view(cart), CartEvent.INVENTORY_OPEN);
         }
     }
 

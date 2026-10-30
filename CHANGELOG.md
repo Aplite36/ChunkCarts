@@ -168,6 +168,12 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   journey's chunks but keeps the journey, and resumes it with its train when it loads. A follower
   that unloads stays on the journey and rejoins it when it loads, rather than coming back as a
   journey of its own.
+- `/chunkcarts reload` no longer throws away departure tokens and cooldown waivers. Both lived only
+  in memory, and every reload builds a new engine, so a cart that had been seen by a player and was
+  waiting out its cooldown lost its token, and a player's right-click no longer waived the cooldown
+  for the next dispatch. Both are now written to the cart when they are granted, and the reload
+  reads them back along with running journeys, which already survived it. The same write keeps a
+  token when a waiting cart's chunk unloads, or the server restarts, before it departs.
 
 ## [0.1.0] - 2026-07-27
 

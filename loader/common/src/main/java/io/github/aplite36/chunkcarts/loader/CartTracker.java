@@ -1,5 +1,6 @@
 package io.github.aplite36.chunkcarts.loader;
 
+import io.github.aplite36.chunkcarts.core.CartEvent;
 import io.github.aplite36.chunkcarts.core.ChunkCartsEngine;
 import io.github.aplite36.chunkcarts.core.DepartureOutcome;
 import io.github.aplite36.chunkcarts.core.RemovalCause;
@@ -118,6 +119,11 @@ public final class CartTracker {
 
     public void recordInteractor(UUID cartId, UUID player) {
         lastInteractor.put(cartId, player);
+    }
+
+    /** Hands the engine something that happened to a cart, with the cart for it to write to. */
+    public void record(AbstractMinecart cart, CartEvent event) {
+        engine.record(view(cart), event);
     }
 
     /**
