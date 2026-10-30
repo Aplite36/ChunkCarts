@@ -238,6 +238,8 @@ Set `metrics: false` to opt out, or disable bStats globally on your server.
 
 ```bash
 ./gradlew :core:test                        # the policy engine's test suite — fast
+./gradlew :bukkit:test                      # the Paper command and listener
+./gradlew :loader:fabric:26.3:test          # loader/common's tests, on the one node that runs them
 ./gradlew :bukkit:build                     # the Paper jar
 ./gradlew :loader:fabric:1.21.11:build      # one loader target
 ./gradlew :loader:buildAll                  # every loader target — slow, see below
