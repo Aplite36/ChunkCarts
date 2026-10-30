@@ -184,14 +184,14 @@ jobs:
       - uses: gradle/actions/setup-gradle@v5
         with:
           # Let the Gradle action manage its own dependency cache, but never write a cache entry
-          # from a matrix job: forty-five jobs racing to save near-identical entries into a 10 GB
+          # from a matrix job: forty-eight jobs racing to save near-identical entries into a 10 GB
           # repository-wide budget evicts each other and costs more than it saves. The dependency
           # cache below is one entry per loader, saved deliberately.
           cache-read-only: true
 
       # Cached deliberately narrowly. The decompiled/patched Minecraft under caches/fabric-loom and
-      # caches/minecraftforge is ~250-500 MB *per target*, so all forty-five would be ~12 GB against
-      # a 10 GB repository cap — guaranteed eviction thrash, and a cache that never hits is slower
+      # caches/minecraftforge is ~250-500 MB *per target*, so all forty-eight would be 12 GB or
+      # more against a 10 GB repository cap — guaranteed eviction thrash, and a cache that never hits is slower
       # than no cache. modules-2 is the ordinary dependency jars, ~1 GB shared across a loader's
       # targets, and it does hit.
       - name: Cache Gradle dependency jars

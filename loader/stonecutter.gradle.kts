@@ -8,7 +8,7 @@ stonecutter active "26.3"
 
 // Deliberately no `stonecutter tasks { order("build") }`, and no `dependsOn` on Stonecutter's own
 // task collection. Both reach across every node in the tree to realise its `build` task, which
-// configures all forty-five projects on any invocation — and ForgeGradle does its Minecraft setup
+// configures all forty-eight projects on any invocation — and ForgeGradle does its Minecraft setup
 // at *configuration* time, so `:loader:forge:1.21.11:build` was measured downloading and patching
 // Minecraft for 1.21, 1.21.1, 1.21.10, 1.21.3 … in turn before it ever reached the compiler. That
 // is what makes configure-on-demand load-bearing here rather than an optimisation; with it, and
