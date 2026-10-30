@@ -23,7 +23,7 @@ include("bukkit")
 val mcTargets = listOf(
     "1.21", "1.21.1", "1.21.3", "1.21.4", "1.21.5", "1.21.6", "1.21.7", "1.21.8",
     "1.21.9", "1.21.10", "1.21.11",
-    "26.1", "26.1.1", "26.1.2", "26.2",
+    "26.1", "26.1.1", "26.1.2", "26.2", "26.3",
 )
 
 // One Stonecutter branch per loader, not one flat list of <mcver>-<loader> nodes. Fabric,
@@ -36,7 +36,7 @@ stonecutter {
         branch("fabric") { versions(mcTargets) }
         branch("neoforge") { versions(mcTargets) }
         branch("forge") { versions(mcTargets) }
-        vcsVersion = "26.2"
+        vcsVersion = "26.3"
     }
 }
 

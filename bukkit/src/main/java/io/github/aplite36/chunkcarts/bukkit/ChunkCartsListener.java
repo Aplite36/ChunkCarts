@@ -95,7 +95,7 @@ final class ChunkCartsListener implements Listener {
      *
      * <p>Paper's event rather than Bukkit's {@code EntityRemoveEvent}, which is annotated
      * {@code @Deprecated(forRemoval = true)} in the 1.21 API this module compiles against. One jar
-     * has to load on every version through 26.2, and registering a handler for a class that has
+     * has to load on every version through 26.3, and registering a handler for a class that has
      * since been deleted fails the whole plugin at enable time, not just this listener.
      */
     @EventHandler(priority = EventPriority.MONITOR)
