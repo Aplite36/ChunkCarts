@@ -52,12 +52,34 @@ final class ForgeJourneyStore implements JourneyStore {
         // targets, not assumed. On the newer branch an absent key is already an empty Optional,
         // which is exactly the "has never travelled" answer needed here.
         //? if >=1.21.5 {
-        return data.getString(KEY).map(Base64.getDecoder()::decode);
+        return data.getString(KEY).flatMap(ForgeJourneyStore::decodeBase64);
         //?} else {
         /*return data.contains(KEY)
-                ? Optional.of(Base64.getDecoder().decode(data.getString(KEY)))
+                ? decodeBase64(data.getString(KEY))
                 : Optional.empty();
         *///?}
+    }
+
+    /**
+     * Empty for a payload that is not base64, rather than the {@link IllegalArgumentException}
+     * {@code Base64.Decoder} throws.
+     *
+     * <p>This matters more on Forge than anywhere else. {@code getPersistentData()} is the shared
+     * {@code ForgeData} tag, not a namespaced attachment registry, so {@code chunkcarts:journey}
+     * sits in a space any mod — or any hand-edited NBT, or a save written partway through a crash —
+     * can put a string into. {@link #read} is called from the entity-load path, so a throw here
+     * takes out the chunk load rather than the one cart.
+     *
+     * <p>Empty is the same answer {@code JourneyCodec.decode} gives for bytes it cannot parse:
+     * discard rather than guess. The cart comes back DORMANT, which is where a cart that has never
+     * travelled starts anyway.
+     */
+    private static Optional<byte[]> decodeBase64(String encoded) {
+        try {
+            return Optional.of(Base64.getDecoder().decode(encoded));
+        } catch (IllegalArgumentException e) {
+            return Optional.empty();
+        }
     }
 
     @Override
