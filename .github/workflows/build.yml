@@ -244,7 +244,8 @@ jobs:
     env:
       # 1.21.11 sits above every API seam on all three loaders at once, which is why the local
       # test servers are all on it too. One version, four loaders: this job answers "does the mod
-      # load and start", not "does it load on every version".
+      # load and start", not "does it load on every version". Changing it needs a matching entry
+      # of pinned downloads in smoke_test.sh, which refuses a version it has none for.
       SMOKE_MC: "1.21.11"
     steps:
       - uses: actions/checkout@v5
