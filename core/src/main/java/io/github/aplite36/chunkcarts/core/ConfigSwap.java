@@ -79,11 +79,39 @@ public final class ConfigSwap {
     }
 
     /**
+     * Reads the config at startup, falling back to the built-in defaults if it cannot be read.
+     *
+     * <p>A reload keeps the running config when the file is broken, but at startup there is no
+     * running config to keep. The choice is between refusing to start and starting on defaults,
+     * and the defaults are the safe ones — {@code STRICT}, {@code PLAYER_SEEN} — so falling back
+     * cannot quietly turn the safety guarantee off. Refusing would leave every cart stranded over a
+     * typo. The failure is reported loudly, and {@code /chunkcarts reload} picks the file up once it
+     * is fixed.
+     *
+     * @param read      produces a validated config, or throws
+     * @param onFailure given a message and the throwable behind it, for the adapter's own logger
+     */
+    public static Prepared startup(Supplier<Prepared> read, BiConsumer<String, Throwable> onFailure) {
+        Objects.requireNonNull(read, "read");
+        Objects.requireNonNull(onFailure, "onFailure");
+        try {
+            return read.get();
+        } catch (RuntimeException error) {
+            onFailure.accept("Could not read the config file, so ChunkCarts is starting on its "
+                    + "built-in defaults. Fix the file and run /chunkcarts reload.", error);
+            return prepare(Map.of());
+        }
+    }
+
+    /**
      * Runs a reload.
      *
      * @param read     produces a validated config, or throws. Must not touch the running runtime —
      *                 the whole point is that this can fail harmlessly
-     * @param teardown stops the running runtime. Not called at all if {@code read} throws
+     * @param teardown stops the running runtime. Not called at all if {@code read} throws, and
+     *                 called a second time if {@code rebuild} throws, to clear whatever the failed
+     *                 rebuild had already put in place. Must therefore cope with a runtime that is
+     *                 only partly built
      * @param rebuild  builds the new runtime from what {@code read} returned, and returns whatever
      *                 else wants reporting — in practice {@code engine.startupWarnings()}, which
      *                 does not exist until the engine has been constructed and resolved its config
@@ -106,11 +134,27 @@ public final class ConfigSwap {
             return new Result(Outcome.KEPT, List.of());
         }
 
-        teardown.run();
+        try {
+            teardown.run();
+        } catch (RuntimeException error) {
+            // Not rebuilt on top of: whatever the old runtime failed to release is still out
+            // there, and a second runtime would hold chunks alongside it.
+            onFailure.accept("Config reload could not stop the running runtime. "
+                    + "ChunkCarts is NOT running. Restart the server.", error);
+            return new Result(Outcome.BROKEN, List.of());
+        }
         List<String> resolved;
         try {
             resolved = rebuild.apply(prepared);
         } catch (RuntimeException error) {
+            // The rebuild may have got part of the way: an engine assigned, a listener registered,
+            // no travel loop. Left like that, the adapter looked healthy to /chunkcarts list while
+            // nothing moved carts or released chunks. Tearing down again leaves it plainly stopped.
+            try {
+                teardown.run();
+            } catch (RuntimeException cleanup) {
+                error.addSuppressed(cleanup);
+            }
             onFailure.accept("Config reload read the file but could not rebuild the runtime. "
                     + "ChunkCarts is NOT running. Restart the server once the cause is fixed.", error);
             return new Result(Outcome.BROKEN, List.of());

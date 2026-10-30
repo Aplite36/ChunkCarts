@@ -113,6 +113,7 @@ public final class ChunkCartsFabric implements ModInitializer, ChunkCartsMod {
                 metrics = null;
             }
             stop();
+            server = null;
         });
         ServerTickEvents.END_SERVER_TICK.register(this::onServerTick);
 
@@ -228,7 +229,7 @@ public final class ChunkCartsFabric implements ModInitializer, ChunkCartsMod {
     }
 
     private void start(MinecraftServer startedServer) {
-        start(startedServer, readConfig());
+        start(startedServer, ConfigSwap.startup(this::readConfig, LOGGER::error));
     }
 
     private void start(MinecraftServer startedServer, ConfigSwap.Prepared prepared) {
@@ -306,21 +307,31 @@ public final class ChunkCartsFabric implements ModInitializer, ChunkCartsMod {
         }
     }
 
+    /**
+     * Stops the runtime. Also runs on a runtime a failed reload only partly built, so every field
+     * may be null, and the fields are cleared even if shutting down throws: a non-null engine is
+     * what tells {@code /chunkcarts list} the mod is running.
+     *
+     * <p>{@code server} is left alone. It is the server that is running, not part of the runtime,
+     * and {@link #reloadRuntime()} needs it to rebuild after a failed reload.
+     */
     private void stop() {
-        if (scheduler != null) {
-            scheduler.cancelAll();
+        try {
+            if (scheduler != null) {
+                scheduler.cancelAll();
+            }
+            if (engine != null) {
+                // Releases every ticket and sweeps for anything we lost track of. Without this,
+                // held chunks stay up until their ticket expires.
+                engine.shutdown();
+            }
+        } finally {
+            engine = null;
+            tracker = null;
+            tickets = null;
+            scheduler = null;
+            worlds = null;
         }
-        if (engine != null) {
-            // Releases every ticket and sweeps for anything we lost track of. Without this, held
-            // chunks stay up until their ticket expires.
-            engine.shutdown();
-        }
-        engine = null;
-        tracker = null;
-        tickets = null;
-        scheduler = null;
-        worlds = null;
-        server = null;
     }
 
     private void onServerTick(MinecraftServer ticking) {
