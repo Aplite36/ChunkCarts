@@ -55,12 +55,12 @@ Server side only. There is nothing to install on clients and they do not need th
 
 | Platform | File | Notes |
 | --- | --- | --- |
-| Paper (and Paper forks) | `chunkcarts-<version>+bukkit.jar` | One jar covers 1.21 → 26.2 |
+| Paper (and Paper forks) | `chunkcarts-<version>+bukkit.jar` | One jar covers 1.21 → 26.3 |
 | Fabric | `chunkcarts-<version>+<mcver>-fabric.jar` | One jar per game version; needs Fabric API |
 | NeoForge | `chunkcarts-<version>+<mcver>-neoforge.jar` | One jar per game version |
 | Forge | `chunkcarts-<version>+<mcver>-forge.jar` | One jar per game version |
 
-Game versions: `1.21`, `1.21.1`, `1.21.3` … `1.21.11`, `26.1`, `26.1.1`, `26.1.2`, `26.2`.
+Game versions: `1.21`, `1.21.1`, `1.21.3` … `1.21.11`, `26.1`, `26.1.1`, `26.1.2`, `26.2`, `26.3`.
 (1.21.2 is skipped — it was superseded within days and is not worth carrying.)
 
 **Paper, not Spigot.** The Bukkit jar requires Paper or a Paper fork. It uses Paper's asynchronous

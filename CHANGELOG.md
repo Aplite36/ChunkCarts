@@ -39,6 +39,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `/chunkcarts help` happened to work, while Brigadier answered the same guess on Fabric, NeoForge
   and Forge with "Unknown or incomplete command". Paper now answers an unknown subcommand with the
   full help instead of a usage string, which was a second list of subcommands to forget to update.
+- Minecraft 26.3 support: Fabric (Fabric API 0.165.0+26.3), NeoForge (26.3.0.99) and Forge
+  (66.1.2) jars for 26.3, and the Paper jar is now stated to cover 1.21 → 26.3.
 
 ### Changed
 

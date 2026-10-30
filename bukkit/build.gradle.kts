@@ -14,7 +14,7 @@ dependencies {
     implementation(project(":metrics"))
 
     // Compiled against the 1.21 API floor. Bukkit is forward-compatible at runtime but
-    // not backward, so the floor is what makes one jar cover 1.21 -> 26.2.
+    // not backward, so the floor is what makes one jar cover 1.21 -> 26.3.
     // Do not raise this to chase a newer API without re-reading that constraint.
     compileOnly("io.papermc.paper:paper-api:1.21-R0.1-SNAPSHOT")
 }
