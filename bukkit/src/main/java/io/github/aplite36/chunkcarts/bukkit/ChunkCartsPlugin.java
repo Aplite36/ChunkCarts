@@ -144,17 +144,22 @@ public final class ChunkCartsPlugin extends JavaPlugin {
      * <p>{@link ConfigSwap} holds the ordering and the reasoning; all four adapters go through it so
      * they cannot disagree about what a failed reload leaves behind.
      */
-    ConfigSwap.Outcome reloadRuntime() {
-        ConfigSwap.Outcome outcome = ConfigSwap.swap(
+    ConfigSwap.Result reloadRuntime() {
+        ConfigSwap.Result result = ConfigSwap.swap(
                 this::readConfig,
                 this::stop,
-                this::start,
+                prepared -> {
+                    start(prepared);
+                    // Not available before this point: resolve() runs inside the engine's
+                    // constructor, so the clamp warnings do not exist until it does.
+                    return engine.startupWarnings();
+                },
                 (message, error) -> getLogger().log(java.util.logging.Level.SEVERE, message, error));
-        if (outcome == ConfigSwap.Outcome.RELOADED) {
+        if (result.outcome() == ConfigSwap.Outcome.RELOADED) {
             tracker.setDebug(debug);
             tickets.setDebug(debug);
         }
-        return outcome;
+        return result;
     }
 
     /**

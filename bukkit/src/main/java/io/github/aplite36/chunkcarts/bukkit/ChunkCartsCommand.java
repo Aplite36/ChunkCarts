@@ -173,11 +173,23 @@ final class ChunkCartsCommand implements CommandExecutor, TabCompleter {
         // Every ticket is released and every journey re-read from cart NBT, which is the source of
         // truth. Carts in flight carry on; they do not need a fresh token, because
         // resuming a restored journey is not a departure.
-        ConfigSwap.Outcome outcome = plugin.reloadRuntime();
+        ConfigSwap.Result result = plugin.reloadRuntime();
+        ConfigSwap.Outcome outcome = result.outcome();
         ChunkCartsEngine engine = plugin.engine();
         switch (outcome) {
-            case RELOADED -> sender.sendMessage("[ChunkCarts] Config reloaded. Enforcement: "
-                    + engine.config().enforcement() + ".");
+            // The warnings are why someone runs reload in the first place: each one names the key,
+            // the value they wrote and what it was changed to. They all went to the console, which
+            // is the one place the person who just ran the command is not looking. The count is
+            // stated even at zero, because otherwise silence and success read the same.
+            case RELOADED -> {
+                sender.sendMessage("[ChunkCarts] Config reloaded. Enforcement: "
+                        + engine.config().enforcement() + ". "
+                        + (result.warnings().isEmpty()
+                                ? "Nothing to report."
+                                : result.warnings().size() + " warning(s):"));
+                ConfigSwap.report(result.warnings())
+                        .forEach(line -> sender.sendMessage("[ChunkCarts] " + line));
+            }
             case KEPT -> sender.sendMessage(engine == null
                     ? "[ChunkCarts] Not running, so there was nothing to reload."
                     : "[ChunkCarts] Config NOT reloaded — the file on disk could not be read. Still "

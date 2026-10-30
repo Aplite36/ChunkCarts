@@ -218,11 +218,21 @@ public final class ChunkCartsCommand {
         // Reading mod.engine() unconditionally used to be an NPE on a failed reload, which left the
         // engine null: the first reload reported the real error and every reload after it reported
         // the NPE instead, hiding it.
-        ConfigSwap.Outcome outcome = mod.reloadRuntime();
+        ConfigSwap.Result result = mod.reloadRuntime();
+        ConfigSwap.Outcome outcome = result.outcome();
         ChunkCartsEngine engine = mod.engine();
         switch (outcome) {
-            case RELOADED -> send(source, "Config reloaded. Enforcement: "
-                    + engine.config().enforcement() + ".");
+            // The warnings are why someone runs reload in the first place: each one names the key,
+            // the value they wrote and what it was changed to. They all went to the console, which
+            // is the one place the person who just ran the command is not looking. The count is
+            // stated even at zero, because otherwise silence and success read the same.
+            case RELOADED -> {
+                send(source, "Config reloaded. Enforcement: " + engine.config().enforcement() + ". "
+                        + (result.warnings().isEmpty()
+                                ? "Nothing to report."
+                                : result.warnings().size() + " warning(s):"));
+                ConfigSwap.report(result.warnings()).forEach(line -> send(source, line));
+            }
             case KEPT -> send(source, engine == null
                     ? "Not running, so there was nothing to reload."
                     : "Config NOT reloaded — the file on disk could not be read. Still running on "

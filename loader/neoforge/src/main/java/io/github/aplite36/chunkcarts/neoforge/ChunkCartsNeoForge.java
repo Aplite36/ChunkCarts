@@ -208,21 +208,26 @@ public final class ChunkCartsNeoForge implements ChunkCartsMod {
      * they cannot disagree about what a failed reload leaves behind.
      */
     @Override
-    public ConfigSwap.Outcome reloadRuntime() {
+    public ConfigSwap.Result reloadRuntime() {
         MinecraftServer running = server;
         if (running == null) {
-            return ConfigSwap.Outcome.KEPT;
+            return new ConfigSwap.Result(ConfigSwap.Outcome.KEPT, List.of());
         }
-        ConfigSwap.Outcome outcome = ConfigSwap.swap(
+        ConfigSwap.Result result = ConfigSwap.swap(
                 this::readConfig,
                 this::stop,
-                prepared -> start(running, prepared),
+                prepared -> {
+                    start(running, prepared);
+                    // Not available before this point: resolve() runs inside the engine's
+                    // constructor, so the clamp warnings do not exist until it does.
+                    return engine.startupWarnings();
+                },
                 (message, error) -> LOGGER.error(message, error));
-        if (outcome == ConfigSwap.Outcome.RELOADED) {
+        if (result.outcome() == ConfigSwap.Outcome.RELOADED) {
             tracker.setDebug(debug);
             tickets.setDebug(debug);
         }
-        return outcome;
+        return result;
     }
 
     /** Reads and validates the config on disk. Touches nothing that is running. */
