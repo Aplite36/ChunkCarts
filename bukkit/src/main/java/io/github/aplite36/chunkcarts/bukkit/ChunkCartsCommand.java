@@ -11,7 +11,6 @@ import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.event.ClickEvent;
 import net.kyori.adventure.text.event.HoverEvent;
 import net.kyori.adventure.text.format.NamedTextColor;
-import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.World;
 import org.bukkit.command.Command;
@@ -192,13 +191,14 @@ final class ChunkCartsCommand implements CommandExecutor, TabCompleter {
      * on this platform is the folder name, which {@code execute in} does not take; a world that
      * has since been unloaded gets no click rather than a broken one.
      */
-    private static void sendRow(CommandSender sender, JourneySnapshot journey) {
+    private void sendRow(CommandSender sender, JourneySnapshot journey) {
         String text = row(journey);
         Optional<Component> clickable = journey.approximateChunk()
                 .filter(chunk -> sender instanceof Player
                         && sender.hasPermission("minecraft.command.execute")
                         && sender.hasPermission("minecraft.command.teleport"))
-                .flatMap(chunk -> Optional.ofNullable(Bukkit.getWorld(chunk.world().value()))
+                .flatMap(chunk -> Optional.ofNullable(
+                                plugin.getServer().getWorld(chunk.world().value()))
                         .map(World::getKey)
                         .map(key -> Component.text(text)
                                 .clickEvent(ClickEvent.runCommand(

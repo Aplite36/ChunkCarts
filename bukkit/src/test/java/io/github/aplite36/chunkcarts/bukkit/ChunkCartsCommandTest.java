@@ -10,8 +10,15 @@ import io.github.aplite36.chunkcarts.core.JourneyState;
 import io.github.aplite36.chunkcarts.core.WhyReport;
 import io.github.aplite36.chunkcarts.core.WorldId;
 import io.github.aplite36.chunkcarts.core.platform.CartView;
+import net.kyori.adventure.text.Component;
+import net.kyori.adventure.text.event.ClickEvent;
+import net.kyori.adventure.text.event.HoverEvent;
 import net.kyori.adventure.text.format.NamedTextColor;
+import net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer;
 import org.bukkit.Location;
+import org.bukkit.NamespacedKey;
+import org.bukkit.Server;
+import org.bukkit.World;
 import org.bukkit.command.Command;
 import org.bukkit.entity.Player;
 import org.junit.jupiter.api.BeforeEach;
@@ -288,6 +295,85 @@ class ChunkCartsCommandTest {
 
             assertEquals(1, lines.size());
             assertTrue(lines.get(0).contains("ChunkCarts is NOT running"), lines.get(0));
+        }
+    }
+
+    @Nested
+    class ClickableRows {
+
+        private static final String ROW = "  TRAVELLING 1 cart(s)  near world 0,16  from world 0,0  "
+                + "distance 0  slack 0  budget 100";
+
+        private final Player player = mock(Player.class);
+        private final Server server = mock(Server.class);
+        private final World world = mock(World.class);
+
+        @BeforeEach
+        void oneJourneyInTheOverworld() {
+            when(engine.journeys()).thenReturn(List.of(new JourneySnapshot(UUID.randomUUID(),
+                    JourneyState.TRAVELLING, UUID.randomUUID(), Set.of(UUID.randomUUID()),
+                    new ChunkPos(OVERWORLD, 0, 0), 0, 0, 100, 0,
+                    Set.of(new ChunkPos(OVERWORLD, 0, 1)))));
+            when(plugin.heldChunkCount()).thenReturn(1);
+            when(plugin.getServer()).thenReturn(server);
+            when(server.getWorld("world")).thenReturn(world);
+            when(world.getKey()).thenReturn(NamespacedKey.minecraft("overworld"));
+            when(player.hasPermission("minecraft.command.execute")).thenReturn(true);
+            when(player.hasPermission("minecraft.command.teleport")).thenReturn(true);
+        }
+
+        private Chat listAsPlayer() {
+            Chat chat = Chat.player(player);
+            assertTrue(command.onCommand(chat.sender, bukkitCommand, "chunkcarts",
+                    new String[] {"list"}));
+            return chat;
+        }
+
+        @Test
+        void theConsoleGetsThePlainRow() {
+            Chat chat = run("chunkcarts", "list");
+
+            assertEquals(ROW, chat.lines.get(1));
+            assertEquals(1, chat.components.size(), "only the header is a component");
+        }
+
+        @Test
+        void aPlayerWhoCanTeleportGetsTheSameTextWithAClickToTheNearPosition() {
+            Chat chat = listAsPlayer();
+            Component row = chat.components.get(1);
+
+            assertEquals(ROW, chat.lines.get(1));
+            assertEquals(ClickEvent.runCommand(
+                            "/execute in minecraft:overworld run tp @s 0 ~ 16"),
+                    row.clickEvent());
+            assertEquals(HoverEvent.Action.SHOW_TEXT, row.hoverEvent().action());
+            assertTrue(PlainTextComponentSerializer.plainText()
+                    .serialize((Component) row.hoverEvent().value()).contains("world 0,16"));
+        }
+
+        @Test
+        void aPlayerWithoutTheTeleportPermissionGetsThePlainRow() {
+            when(player.hasPermission("minecraft.command.teleport")).thenReturn(false);
+            Chat chat = listAsPlayer();
+
+            assertEquals(ROW, chat.lines.get(1));
+            assertEquals(1, chat.components.size());
+        }
+
+        @Test
+        void aPlayerWithoutExecuteGetsThePlainRow() {
+            when(player.hasPermission("minecraft.command.execute")).thenReturn(false);
+
+            assertEquals(1, listAsPlayer().components.size());
+        }
+
+        @Test
+        void anUnloadedWorldGetsNoClickRatherThanABrokenOne() {
+            when(server.getWorld("world")).thenReturn(null);
+            Chat chat = listAsPlayer();
+
+            assertEquals(ROW, chat.lines.get(1));
+            assertEquals(1, chat.components.size());
         }
     }
 
