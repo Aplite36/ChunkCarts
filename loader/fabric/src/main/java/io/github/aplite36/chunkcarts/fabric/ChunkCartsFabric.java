@@ -366,7 +366,7 @@ public final class ChunkCartsFabric implements ModInitializer, ChunkCartsMod {
 
     private void onEntityUnload(Entity entity, ServerLevel level) {
         if (tracker != null && entity instanceof AbstractMinecart cart) {
-            tracker.untrack(cart.getUUID());
+            tracker.untrack(cart);
         }
     }
 
@@ -387,7 +387,7 @@ public final class ChunkCartsFabric implements ModInitializer, ChunkCartsMod {
             return InteractionResult.PASS;
         }
         tracker.recordInteractor(cart.getUUID(), player.getUUID());
-        engine.record(cart.getUUID(),
+        tracker.record(cart,
                 cart instanceof Container ? CartEvent.INVENTORY_OPEN : CartEvent.RIGHT_CLICK);
         return InteractionResult.PASS;
     }
@@ -430,7 +430,7 @@ public final class ChunkCartsFabric implements ModInitializer, ChunkCartsMod {
             return;
         }
         tracker.recordInteractor(cart.getUUID(), placement.player());
-        engine.record(cart.getUUID(), CartEvent.PLACEMENT);
+        tracker.record(cart, CartEvent.PLACEMENT);
     }
 
     private static String modVersion() {

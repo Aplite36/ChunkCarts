@@ -2,6 +2,7 @@ package io.github.aplite36.chunkcarts.bukkit;
 
 import io.github.aplite36.chunkcarts.core.ChunkCartsEngine;
 import io.github.aplite36.chunkcarts.core.DepartureOutcome;
+import io.github.aplite36.chunkcarts.core.RemovalCause;
 import io.github.aplite36.chunkcarts.core.TerminationReason;
 import io.github.aplite36.chunkcarts.core.WhyReport;
 import io.github.aplite36.chunkcarts.core.platform.CartView;
@@ -77,16 +78,14 @@ final class CartTracker {
     }
 
     /**
-     * Drops a cart the server no longer has, releasing anything held for it.
-     *
-     * <p>Called for an unloaded cart as well as a destroyed one. Releasing is the safe direction
-     * in both cases: the journey lives in the cart's own PDC, so an unloaded cart re-registers
-     * itself when its chunk comes back, whereas a journey whose lead has quietly vanished would
-     * hold its region until the next restart.
+     * Drops a cart the server no longer has. Called for a destroyed cart, an unloaded one and one
+     * that went through a portal, and the cause decides what happens to its journey: only a
+     * destroyed cart ends anything. The other two come back through {@link #track}, from their
+     * own PDC, and rejoin the journey they left.
      */
-    void untrack(UUID cartId) {
+    void untrack(UUID cartId, RemovalCause cause) {
         if (tracked.remove(cartId) != null) {
-            engine.onCartRemoved(cartId, this::viewOrNull);
+            engine.onCartRemoved(cartId, cause, this::viewOrNull);
         }
         lastInteractor.remove(cartId);
     }
@@ -147,7 +146,11 @@ final class CartTracker {
         List<CartView> views = new ArrayList<>(tracked.size());
         for (Minecart cart : List.copyOf(tracked.values())) {
             if (!cart.isValid()) {
-                untrack(cart.getUniqueId());
+                // The removal event normally gets here first. A cart that is invalid but not dead is
+                // still in the world, in a chunk that is not loaded; a dead one could be either, and
+                // is treated as destroyed, which is what every removal meant before causes existed.
+                untrack(cart.getUniqueId(),
+                        cart.isDead() ? RemovalCause.DESTROYED : RemovalCause.UNLOADED);
                 continue;
             }
             views.add(view(cart));

@@ -44,12 +44,14 @@ class ChunkCartsListenerTest {
         Player player = mock(Player.class);
         when(player.getUniqueId()).thenReturn(playerId);
         when(cart.getUniqueId()).thenReturn(cartId);
+        BukkitCartView view = mock(BukkitCartView.class);
+        when(tracker.view(cart)).thenReturn(view);
 
         listener.onEntityPlace(placed(cart, player));
 
         verify(tracker).track(cart);
         verify(tracker).recordInteractor(cartId, playerId);
-        verify(engine).record(cartId, CartEvent.PLACEMENT);
+        verify(engine).record(view, CartEvent.PLACEMENT);
     }
 
     @Test
