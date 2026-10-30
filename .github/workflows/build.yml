@@ -119,6 +119,18 @@ jobs:
             core/build/reports/tests/test/
             metrics/build/reports/tests/test/
 
+  # The CI scripts fail a release rather than a test when they go wrong: smoke_test.sh carries the
+  # download checksums and the boot check, and `bash -n` only proves they parse. shellcheck is
+  # preinstalled on ubuntu-latest. A finding that is wrong for a given line gets a targeted
+  # `# shellcheck disable=SCxxxx` with the reason beside it, not a blanket exclusion here.
+  scripts:
+    name: shellcheck
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - run: shellcheck --version && shellcheck .github/scripts/*.sh
+
   bukkit:
     name: bukkit jar
     runs-on: ubuntu-latest
@@ -278,7 +290,7 @@ jobs:
   build-ok:
     name: Build OK
     runs-on: ubuntu-latest
-    needs: [core, bukkit, loader, smoke]
+    needs: [core, scripts, bukkit, loader, smoke]
     if: always()
     steps:
       - name: Fail unless every job succeeded
