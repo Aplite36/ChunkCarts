@@ -68,6 +68,17 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   accepting any version ever released. Installing a jar on an older loader is refused with a clear
   message rather than loading and then failing on a missing method with nothing to say why. The
   release checks now assert this, so it cannot quietly return.
+- A TNT, command block or spawner minecart parked against a cart that is about to depart no longer
+  travels with it. Only the cart at the front of a group was checked against the permitted types,
+  and whatever was touching it came along unexamined — chunks held for it, its whole route loaded.
+  These three types can never be enabled in the config, and standing next to something that can is
+  no longer a way around that.
+- Breaking the front cart of a travelling group now ends the journey properly for the carts left
+  behind. Their chunks were released and the journey dropped, but each survivor kept a saved record
+  that still said it was travelling, so the next time one of them unloaded and loaded again the
+  finished journey came back — re-holding its area without spending any of the travel budget or
+  needing a fresh departure. This is the other side of the group fix above, which covered a
+  follower being broken but not the lead.
 - A `cart-types` entry that is not `true` or `false` is now reported as disabling that cart type,
   which is what actually happens. The warning previously said the default was used, telling an
   admin the opposite of what became of the cart type they were trying to debug.

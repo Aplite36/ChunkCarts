@@ -16,6 +16,7 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import java.util.function.Function;
 
 /**
  * The policy engine. Everything the invariants promise is enforced here, and nothing here
@@ -192,6 +193,14 @@ public final class ChunkCartsEngine {
         journey.members.add(lead.id());
         cluster.add(lead);
         for (CartView contact : contacts) {
+            // Riding along in a cluster is not a way around gate 2. A TNT cart towed by its
+            // neighbour has its chunks held and its route loaded exactly as one that departed on
+            // its own would, which is the outcome config.yml promises can never happen. Filtered
+            // here rather than in the contact search, because there are two of those — one per
+            // adapter — and only the engine is a place neither of them can forget.
+            if (!config.isCartTypeAllowed(contact.type())) {
+                continue;
+            }
             if (journey.members.add(contact.id())) {
                 cluster.add(contact);
             }
@@ -353,8 +362,16 @@ public final class ChunkCartsEngine {
         }
     }
 
-    /** Releases anything held on behalf of a cart that no longer exists. */
-    public void onCartRemoved(UUID cartId) {
+    /**
+     * Releases anything held on behalf of a cart that no longer exists.
+     *
+     * @param views resolves a cart still on the server to a live view, or null if it has gone
+     *              too. Losing a cluster's lead ends the journey for its followers, and ending a
+     *              journey means writing DORMANT back to the carts it leaves behind — which cannot
+     *              be done from a UUID alone, hence the lookup. It is consulted only for the
+     *              survivors of a cluster, so the common case of a solitary cart never calls it
+     */
+    public void onCartRemoved(UUID cartId, Function<UUID, CartView> views) {
         UUID journeyId = journeyByCart.get(cartId);
         if (journeyId != null) {
             Journey journey = journeys.get(journeyId);
@@ -373,11 +390,18 @@ public final class ChunkCartsEngine {
                     journeyByCart.remove(cartId);
                     lastTermination.put(cartId, TerminationReason.DROPPED);
                 } else {
+                    // Losing the lead ends the journey for the whole cluster, and ending it has to
+                    // mean here what it means everywhere else: the survivors go back to DORMANT on
+                    // the entity and get a reason recorded. Left out, they kept a saved record that
+                    // still said TRAVELLING, and the next unload and reload had restore rebuild the
+                    // finished journey and re-hold its region — off-budget, and without spending a
+                    // departure token, because a resumed journey is not a departure.
                     releaseAll(journey);
+                    journey.members.remove(cartId);
                     for (UUID member : journey.members) {
-                        journeyByCart.remove(member);
+                        lastTermination.put(member, TerminationReason.DROPPED);
                     }
-                    journeys.remove(journey.id);
+                    forget(journey, views);
                     journeyByCart.remove(cartId);
                 }
             } else {
@@ -745,7 +769,7 @@ public final class ChunkCartsEngine {
 
         if (complete) {
             releaseAll(journey);
-            forget(journey, views);
+            forget(journey, views::get);
         }
     }
 
@@ -780,7 +804,7 @@ public final class ChunkCartsEngine {
 
         journey.state = JourneyState.STRANDED;
         releaseAll(journey);
-        forget(journey, views);
+        forget(journey, views::get);
     }
 
     private void releaseAll(Journey journey) {
@@ -822,11 +846,11 @@ public final class ChunkCartsEngine {
     }
 
     /** Drops the journey from the index and returns its carts to DORMANT. */
-    private void forget(Journey journey, Map<UUID, CartView> views) {
+    private void forget(Journey journey, Function<UUID, CartView> views) {
         journey.state = JourneyState.DORMANT;
         for (UUID member : journey.members) {
             journeyByCart.remove(member);
-            CartView view = views.get(member);
+            CartView view = views.apply(member);
             if (view != null) {
                 flushDormant(view);
             }

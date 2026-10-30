@@ -18,8 +18,6 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 @DisplayName("Persistence")
 class PersistenceTest extends EngineTest {
 
-    private final JourneyCodec codec = new JourneyCodec();
-
     private JourneyRecord sampleRecord() {
         return new JourneyRecord(
                 false,
@@ -128,20 +126,6 @@ class PersistenceTest extends EngineTest {
     }
 
     // ---- flush freshness -----------------------------------------------------------------------
-
-    /**
-     * What is actually on the entity right now, which is the source of truth persistence cares
-     * about.
-     */
-    private JourneyRecord persisted(FakeCart cart) {
-        return cart.readState().flatMap(codec::decode)
-                .orElseThrow(() -> new AssertionError("expected persisted state on " + cart.id()));
-    }
-
-    /** A second engine over the same carts: what a restart or {@code /chunkcarts reload} does. */
-    private ChunkCartsEngine restarted() {
-        return new ChunkCartsEngine(config(), world, tickets, clock);
-    }
 
     @Test
     @DisplayName("a new distance record is flushed immediately")
