@@ -72,6 +72,8 @@ class LifecycleTest extends EngineTest {
         removeCart(follower, lead);
 
         assertEquals(1, journeyOf(lead).cartCount(), "lead's journey survives the follower's removal");
+        assertTrue(engine().lastTermination(follower.id()).isEmpty(),
+                "the follower is gone; recording why its journey ended only leaks an entry");
         assertEquals(JourneyState.TRAVELLING, journeyOf(lead).state());
         assertTrue(tickets.heldCount() > 0, "the lead's chunks must still be held");
         assertTrue(engine().journeyOf(lead.id()).isPresent());
@@ -104,6 +106,9 @@ class LifecycleTest extends EngineTest {
 
         assertEquals(0, tickets.heldCount(), "removing the lead ends the journey and releases everything");
         assertNoJourney(follower);
+        assertTerminated(follower, TerminationReason.DROPPED);
+        assertTrue(engine().lastTermination(lead.id()).isEmpty(),
+                "the survivor keeps its reason for /chunkcarts why; the removed lead does not");
     }
 
     @Test

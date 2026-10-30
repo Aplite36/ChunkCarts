@@ -71,6 +71,18 @@ class WhyReportTest extends EngineTest {
     }
 
     @Test
+    @DisplayName("a removed cart's denial is forgotten")
+    void aRemovedCartsDenialIsForgotten() {
+        FakeCart cart = FakeCart.at(OVERWORLD, 0, 0);
+        assertDenied(depart(cart), DenialReason.NO_TOKEN);
+
+        removeCart(cart);
+
+        assertEquals(Optional.empty(), engine().lastDenial(cart.id()),
+                "nothing asks about a cart the tracker no longer has, so keeping it is a leak");
+    }
+
+    @Test
     @DisplayName("the cooldown says how much longer, not just that there is one")
     void theCooldownSaysHowMuchLonger() {
         // COOLDOWN alone is not an answer an admin can act on. "For another seven minutes" is the
@@ -145,6 +157,17 @@ class WhyReportTest extends EngineTest {
         assertTrue(lines.get(0).contains(cart.type().name()), lines.get(0));
         assertTrue(lines.get(0).contains("world"), lines.get(0));
         assertTrue(lines.get(1).contains("No journey has ended"), lines.get(1));
+    }
+
+    @Test
+    @DisplayName("negative coordinates name the block the cart is in")
+    void negativeCoordinatesNameTheBlockTheCartIsIn() {
+        // A cast rounds toward zero, so -0.5 came out as 0: the block next door.
+        FakeCart cart = new FakeCart(OVERWORLD).atBlock(-0.5, -15.5);
+
+        String first = WhyReport.lines(cart, engine()).get(0);
+
+        assertTrue(first.endsWith(" -1,64,-16"), first);
     }
 
     @Test
