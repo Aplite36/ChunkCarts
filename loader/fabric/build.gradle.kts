@@ -100,6 +100,29 @@ dependencies {
     "include"("org.yaml:snakeyaml:$snakeyamlVersion")
 }
 
+// Tests for loader/common (#51), compiled and run on one node only: Fabric 26.3. One node is
+// enough because the shared tree is the same source on every target, give or take the
+// Stonecutter conditionals, and the tests are aimed at the logic rather than at the API seams.
+// Fabric because Loom puts a plain Minecraft jar on the test classpath with no extra setup, and
+// 26.3 because it is the vcsVersion: unobfuscated, so nothing is remapped, and the committed text
+// of loader/common is already the text this node compiles.
+//
+// The test directory is added with srcDir, so Stonecutter does not preprocess it (see the symlink
+// note above). Tests there must not use Stonecutter conditionals; they only ever see 26.3.
+if (mc == "26.3") {
+    sourceSets.test {
+        java.srcDir(rootProject.file("loader/common/src/test/java"))
+    }
+    dependencies {
+        testImplementation(platform("org.junit:junit-bom:6.1.2"))
+        testImplementation("org.junit.jupiter:junit-jupiter")
+        testRuntimeOnly("org.junit.platform:junit-platform-launcher")
+    }
+    tasks.test {
+        useJUnitPlatform()
+    }
+}
+
 tasks.processResources {
     val modVersion = project.version.toString()
     inputs.property("version", modVersion)
