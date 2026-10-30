@@ -35,8 +35,9 @@ public final class ChunkCartsMetrics {
      * bStats has no Fabric, NeoForge or Forge module — the request for one has been open since
      * 2019 — so a mod reports under the Bukkit platform and fills in the Bukkit field names. This
      * is the established convention rather than a workaround of ours; C2ME and others do the same.
-     * The fields stay honest: a Fabric server reports itself as Fabric in {@code bukkitName}, which
-     * is what makes the server-software breakdown worth having across four platforms at once.
+     * The fields stay honest: a Fabric server reports its own brand in {@code bukkitName}, not
+     * "Bukkit", which is what makes the server-software breakdown worth having across four
+     * platforms at once.
      */
     private static final String BSTATS_PLATFORM = "bukkit";
 
@@ -112,10 +113,12 @@ public final class ChunkCartsMetrics {
      * straight into {@code addCustomChart} so {@code ChunkCartsMetricsTest} can pin the chart ids
      * the same way it pins the other two paths' field names.
      *
-     * <p>{@code platform} duplicates {@code bukkitName} rather than adding new information: bStats'
-     * own Server Software chart only recognises Bukkit-family names, so every Fabric, NeoForge and
-     * Forge server renders as "Unknown" there. This chart is ours, reads all four platforms, and is
-     * the one to look at instead.
+     * <p>{@code platform} is which ChunkCarts jar is running, and on Paper and plain loader servers
+     * it says the same thing as {@code bukkitName}: bStats' own Server Software chart only
+     * recognises Bukkit-family names, so every Fabric, NeoForge and Forge server renders as
+     * "Unknown" there. This chart is ours, reads all four platforms, and is the one to look at
+     * instead. It stays the loader name rather than following {@code bukkitName} to the server
+     * brand, so a hybrid's brand cannot split one loader across several slices.
      */
     static List<SimplePie> customCharts(MetricsPlatform platform) {
         return List.of(
@@ -154,16 +157,27 @@ public final class ChunkCartsMetrics {
      * world data, an address or a coordinate.
      */
     static void appendPlatformData(JsonObjectBuilder builder, MetricsPlatform platform) {
+        String software = reportedSoftware(platform);
         builder.appendField("playerAmount", platform.playerCount());
         builder.appendField("onlineMode", platform.onlineMode() ? 1 : 0);
         builder.appendField("bukkitVersion",
-                platform.serverSoftware() + " (MC: " + platform.minecraftVersion() + ")");
-        builder.appendField("bukkitName", platform.serverSoftware());
+                software + " (MC: " + platform.minecraftVersion() + ")");
+        builder.appendField("bukkitName", software);
         builder.appendField("javaVersion", System.getProperty("java.version"));
         builder.appendField("osName", System.getProperty("os.name"));
         builder.appendField("osArch", System.getProperty("os.arch"));
         builder.appendField("osVersion", System.getProperty("os.version"));
         builder.appendField("coreCount", Runtime.getRuntime().availableProcessors());
+    }
+
+    /**
+     * What {@code bukkitName} carries: the server's own brand, or the loader name when the server
+     * gives none. A Bukkit server fills this field with its brand, so a mod reporting under the
+     * Bukkit platform should too; that is what lets a hybrid show up as itself.
+     */
+    static String reportedSoftware(MetricsPlatform platform) {
+        String brand = platform.serverBrand();
+        return brand == null || brand.isBlank() ? platform.serverSoftware() : brand;
     }
 
     /** The per-mod fields. */

@@ -226,9 +226,14 @@ No player data, no world data, no IP addresses, no coordinates. The two settings
 one reason — deciding which platforms and game versions are worth carrying, and whether anyone
 actually uses permissive mode, from evidence instead of guesswork.
 
+The server software sent is the brand the server gives itself, the same name its clients see. On
+Paper and on a plain Fabric, NeoForge or Forge server that is just the platform's name; a hybrid
+server running a loader jar reports its own name instead.
+
 bStats' own Server Software chart only recognises Bukkit-family names, so a Fabric, NeoForge or
-Forge server renders there as "Unknown". ChunkCarts reports a second `platform` chart with the same
-server-software value, so those installs show up correctly somewhere on the dashboard.
+Forge server renders there as "Unknown". ChunkCarts reports a second `platform` chart naming which
+ChunkCarts jar is running (Paper, Fabric, NeoForge or Forge), so those installs show up correctly
+somewhere on the dashboard.
 
 Set `metrics: false` to opt out, or disable bStats globally on your server.
 

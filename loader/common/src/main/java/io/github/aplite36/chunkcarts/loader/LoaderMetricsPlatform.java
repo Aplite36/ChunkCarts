@@ -13,9 +13,9 @@ import java.util.function.Supplier;
  * at once.
  *
  * <p>No preprocessor directives, and that is a checked fact rather than an assumption: {@code
- * getServerVersion()}, {@code usesAuthentication()}, {@code getPlayerList()} and the inherited
- * {@code execute(Runnable)} all have identical signatures in the mapped jars for 1.21 and for 26.2,
- * so one copy spans every target. Only the loader's name, its config directory and the mod version
+ * getServerVersion()}, {@code getServerModName()}, {@code usesAuthentication()},
+ * {@code getPlayerList()} and the inherited {@code execute(Runnable)} all have identical signatures
+ * in the mapped jars from 1.21 through 26.3, so one copy spans every target. Only the loader's name, its config directory and the mod version
  * differ, and those are constructor arguments supplied by each entry point.
  */
 public final class LoaderMetricsPlatform implements MetricsPlatform {
@@ -43,6 +43,15 @@ public final class LoaderMetricsPlatform implements MetricsPlatform {
     @Override
     public String serverSoftware() {
         return serverSoftware;
+    }
+
+    /**
+     * The brand the server sends clients, which each loader patches to name itself and a hybrid
+     * patches again. Read on every submit, like every other answer here.
+     */
+    @Override
+    public String serverBrand() {
+        return server.getServerModName();
     }
 
     @Override
