@@ -10,11 +10,16 @@ import org.bukkit.Chunk;
 import org.bukkit.NamespacedKey;
 import org.bukkit.World;
 import org.bukkit.configuration.ConfigurationSection;
+import org.bukkit.configuration.InvalidConfigurationException;
+import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.entity.Minecart;
 import org.bukkit.entity.Player;
 import org.bukkit.event.HandlerList;
 import org.bukkit.plugin.java.JavaPlugin;
 
+import java.io.File;
+import java.io.IOException;
+import java.io.UncheckedIOException;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -178,16 +183,33 @@ public final class ChunkCartsPlugin extends JavaPlugin {
     }
 
     /**
-     * Reads and validates the config on disk. Touches nothing that is running: {@code reloadConfig}
-     * replaces the plugin's own copy of the file, which the runtime does not consult after start.
+     * Reads and validates the config on disk. Touches nothing that is running.
+     *
+     * <p>Not {@code reloadConfig()}: that logs a YAML syntax error and carries on with an empty
+     * config, which {@code /chunkcarts reload} then applied as a valid all-defaults one and reported
+     * as reloaded. Loading the file directly lets the error reach {@link ConfigSwap}, which keeps
+     * the running settings instead. A missing file is written out again first, as on the loaders.
+     *
+     * @throws UncheckedIOException     if the file cannot be read
+     * @throws IllegalArgumentException if it is not valid YAML
      */
     private ConfigSwap.Prepared readConfig() {
-        reloadConfig();
-        return ConfigSwap.prepare(toMap(getConfig()));
+        saveDefaultConfig();
+        File file = new File(getDataFolder(), "config.yml");
+        YamlConfiguration yaml = new YamlConfiguration();
+        try {
+            yaml.load(file);
+        } catch (IOException e) {
+            throw new UncheckedIOException("Could not read " + file, e);
+        } catch (InvalidConfigurationException e) {
+            throw new IllegalArgumentException(file + " is not valid YAML: " + e.getMessage(), e);
+        }
+        return ConfigSwap.prepare(toMap(yaml));
     }
 
     private void start() {
-        start(readConfig());
+        start(ConfigSwap.startup(this::readConfig,
+                (message, error) -> getLogger().log(java.util.logging.Level.SEVERE, message, error)));
     }
 
     private void start(ConfigSwap.Prepared prepared) {
@@ -243,22 +265,28 @@ public final class ChunkCartsPlugin extends JavaPlugin {
      * nothing in the output saying the plugin had stopped working.
      */
     private void stop() {
-        if (scheduler != null) {
-            scheduler.cancelAll();
+        // Also runs on a runtime a failed reload only partly built — an engine and a registered
+        // listener, no travel loop — so every field may be null, and they are cleared even if
+        // shutting down throws.
+        try {
+            if (scheduler != null) {
+                scheduler.cancelAll();
+            }
+            if (listener != null) {
+                HandlerList.unregisterAll(listener);
+            }
+            if (engine != null) {
+                // Releases every ticket and sweeps for anything we lost track of. Without this,
+                // held chunks leak until the next restart.
+                engine.shutdown();
+            }
+        } finally {
+            engine = null;
+            tracker = null;
+            tickets = null;
+            scheduler = null;
+            listener = null;
         }
-        if (listener != null) {
-            HandlerList.unregisterAll(listener);
-        }
-        if (engine != null) {
-            // Releases every ticket and sweeps for anything we lost track of. Without this, held
-            // chunks leak until the next restart.
-            engine.shutdown();
-        }
-        engine = null;
-        tracker = null;
-        tickets = null;
-        scheduler = null;
-        listener = null;
     }
 
     private void warnAboutRivals() {

@@ -4,10 +4,12 @@ import org.slf4j.Logger;
 import org.yaml.snakeyaml.LoaderOptions;
 import org.yaml.snakeyaml.Yaml;
 import org.yaml.snakeyaml.constructor.SafeConstructor;
+import org.yaml.snakeyaml.error.YAMLException;
 
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.Reader;
+import java.io.UncheckedIOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -42,12 +44,16 @@ public final class ConfigFile {
     }
 
     /**
-     * The config as a nested map, or an empty map if there is nothing readable.
+     * The config as a nested map, or an empty map if there is no file to read.
      *
-     * <p>An unreadable file yields defaults rather than a refusal to start, and says so loudly. The
-     * defaults are the safe ones — {@code STRICT}, {@code PLAYER_SEEN} — so falling back to them
-     * cannot quietly turn the safety guarantee off, which is the only failure mode here that would
-     * matter.
+     * <p>A file that exists and cannot be used throws instead of yielding defaults. Swallowing it
+     * here meant {@code /chunkcarts reload} saw an empty map, read it as a valid all-defaults
+     * config and replaced the running settings with it, reporting success. Throwing lets the reload
+     * keep what was running; at startup, where there is nothing running to keep,
+     * {@code ConfigSwap.startup} falls back to the defaults instead, and says so.
+     *
+     * @throws UncheckedIOException     if the file exists and cannot be read
+     * @throws IllegalArgumentException if it is not valid YAML, or not a mapping at the top level
      */
     @SuppressWarnings("unchecked")
     public static Map<String, Object> load(Logger log, Path configDir) {
@@ -58,17 +64,22 @@ public final class ConfigFile {
         if (!Files.exists(path)) {
             return new LinkedHashMap<>();
         }
+        Object parsed;
         try (Reader reader = Files.newBufferedReader(path, StandardCharsets.UTF_8)) {
-            Object parsed = new Yaml(new SafeConstructor(new LoaderOptions())).load(reader);
-            if (parsed instanceof Map<?, ?> map) {
-                return (Map<String, Object>) map;
-            }
-            log.warn("{} is not a YAML mapping — using defaults.", path);
-        } catch (IOException | RuntimeException e) {
-            log.warn("Could not read {} ({}) — using defaults. Fix the file and run "
-                    + "/chunkcarts reload.", path, e.getMessage());
+            parsed = new Yaml(new SafeConstructor(new LoaderOptions())).load(reader);
+        } catch (IOException e) {
+            throw new UncheckedIOException("Could not read " + path, e);
+        } catch (YAMLException e) {
+            throw new IllegalArgumentException(path + " is not valid YAML: " + e.getMessage(), e);
         }
-        return new LinkedHashMap<>();
+        if (parsed == null) {
+            // An empty file, or one that is all comments: nothing set, so every key is a default.
+            return new LinkedHashMap<>();
+        }
+        if (parsed instanceof Map<?, ?> map) {
+            return (Map<String, Object>) map;
+        }
+        throw new IllegalArgumentException(path + " is not a YAML mapping of keys to values.");
     }
 
     /**

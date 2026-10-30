@@ -10,6 +10,7 @@ import java.util.Map;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -100,8 +101,107 @@ class ConfigSwapTest {
 
         assertEquals(ConfigSwap.Outcome.BROKEN, outcome.outcome(),
                 "distinct from KEPT: here the mod really is down and the admin has to know");
-        assertEquals(List.of("read", "teardown"), steps);
+        assertEquals(List.of("read", "teardown", "teardown"), steps,
+                "the second teardown clears whatever the failed rebuild had already put in place");
         assertTrue(failures.get(0).contains("NOT running"));
+    }
+
+    @Test
+    @DisplayName("a half-built runtime is torn down again, so it cannot pass for a working one")
+    void aHalfBuiltRuntimeIsTornDownAgain() {
+        // The adapters assign their engine early in start() and the travel loop late. A rebuild
+        // that threw in between left an engine for /chunkcarts list to report on, and on Paper a
+        // registered listener, with no loop to move carts or release chunks.
+        Object[] engine = {"old"};
+        ConfigSwap.Result outcome = ConfigSwap.swap(
+                this::good,
+                () -> engine[0] = null,
+                prepared -> {
+                    engine[0] = "new, half built";
+                    throw new IllegalStateException("travel loop could not be scheduled");
+                },
+                (message, error) -> failures.add(message));
+
+        assertEquals(ConfigSwap.Outcome.BROKEN, outcome.outcome());
+        assertNull(engine[0], "BROKEN has to leave nothing that looks like it is running");
+    }
+
+    @Test
+    @DisplayName("a failing cleanup does not hide why the rebuild failed")
+    void aFailingCleanupDoesNotHideWhyTheRebuildFailed() {
+        RuntimeException cause = new IllegalStateException("no such world");
+        RuntimeException cleanup = new IllegalStateException("ticket release failed");
+        int[] teardowns = {0};
+        Throwable[] seen = {null};
+
+        ConfigSwap.Result outcome = ConfigSwap.swap(
+                this::good,
+                () -> {
+                    if (++teardowns[0] == 2) {
+                        throw cleanup;
+                    }
+                },
+                prepared -> {
+                    throw cause;
+                },
+                (message, error) -> seen[0] = error);
+
+        assertEquals(ConfigSwap.Outcome.BROKEN, outcome.outcome());
+        assertSame(cause, seen[0], "the rebuild's failure is the one worth reading");
+        assertEquals(List.of(cleanup), List.of(cause.getSuppressed()));
+    }
+
+    @Test
+    @DisplayName("a teardown that throws is reported, and nothing is built on top of it")
+    void aTeardownThatThrowsIsReported() {
+        ConfigSwap.Result outcome = ConfigSwap.swap(
+                this::good,
+                () -> {
+                    throw new IllegalStateException("ticket release failed");
+                },
+                prepared -> { steps.add("rebuild"); return List.of(); },
+                (message, error) -> failures.add(message));
+
+        assertEquals(ConfigSwap.Outcome.BROKEN, outcome.outcome(),
+                "an exception escaping swap would leave the command with no answer at all");
+        assertEquals(List.of("read"), steps,
+                "a second runtime alongside whatever the first failed to release would double-hold");
+        assertTrue(failures.get(0).contains("NOT running"));
+    }
+
+    // ---- startup ------------------------------------------------------------------------------
+
+    @Test
+    @DisplayName("an unreadable file at startup falls back to the safe defaults, loudly")
+    void anUnreadableFileAtStartupFallsBackToTheSafeDefaults() {
+        RuntimeException cause = new IllegalArgumentException("mapping values are not allowed here");
+        Throwable[] seen = {null};
+
+        ConfigSwap.Prepared prepared = ConfigSwap.startup(
+                () -> {
+                    throw cause;
+                },
+                (message, error) -> {
+                    failures.add(message);
+                    seen[0] = error;
+                });
+
+        assertEquals(EnforcementMode.STRICT, prepared.config().enforcement(),
+                "falling back must not be a way to switch the safety guarantee off");
+        assertSame(cause, seen[0]);
+        assertTrue(failures.get(0).contains("/chunkcarts reload"),
+                "the admin has to be told the fix does not need a restart");
+    }
+
+    @Test
+    @DisplayName("a readable file at startup is used as it is")
+    void aReadableFileAtStartupIsUsedAsItIs() {
+        ConfigSwap.Prepared read = good();
+
+        ConfigSwap.Prepared prepared = ConfigSwap.startup(() -> read, (m, e) -> failures.add(m));
+
+        assertSame(read, prepared);
+        assertTrue(failures.isEmpty());
     }
 
     @Test

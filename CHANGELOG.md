@@ -65,9 +65,17 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   before it knew a replacement could be built, so one unreadable config file released every ticket,
   shut the engine down and left nothing running, recoverable only by restarting the server. The
   config is now read and validated first, and a file that cannot be used leaves the settings already
-  in force running untouched. The command says which of the three things happened instead of
-  reporting success either way — and on the mod loaders, a second reload after a failed one used to
-  answer with a NullPointerException that hid the real error.
+  in force running untouched. That includes a YAML syntax error, which every platform used to log
+  and then read as an empty file, so the reload swapped in the defaults and reported success. The
+  command says which of the three things happened instead of reporting success either way — and on
+  the mod loaders, a second reload after a failed one used to answer with a NullPointerException
+  that hid the real error. At server start, where there are no settings in force to keep, a broken
+  file still starts ChunkCarts on its safe defaults (`STRICT`), with an error in the console; fix
+  the file and run `/chunkcarts reload`.
+- A reload whose rebuild fails part-way no longer leaves ChunkCarts looking healthy. The runtime
+  was left half built, so `/chunkcarts list` reported as normal while nothing moved carts or
+  released chunks, and on Paper the event listener stayed registered with no travel loop behind it.
+  It is now stopped cleanly and `list` says "Not running."
 - `/chunkcarts list` on Paper now says "Not running." when the plugin is inert, as it always has on
   the mod loaders. Paper kept its fields after a shutdown, so a plugin that had stopped working
   reported no active journeys, zero chunks held and the old enforcement mode, with nothing in the
