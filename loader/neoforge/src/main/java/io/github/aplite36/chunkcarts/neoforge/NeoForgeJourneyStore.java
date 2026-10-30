@@ -1,6 +1,7 @@
 package io.github.aplite36.chunkcarts.neoforge;
 
 import com.mojang.serialization.Codec;
+import com.mojang.serialization.DataResult;
 import io.github.aplite36.chunkcarts.loader.ChunkCarts;
 import io.github.aplite36.chunkcarts.loader.JourneyStore;
 import net.neoforged.bus.api.IEventBus;
@@ -52,14 +53,38 @@ final class NeoForgeJourneyStore implements JourneyStore {
      * for MC 1.21.6 — a seam of NeoForge's own that lines up with none of the Fabric ones.
      */
     private static AttachmentType<byte[]> createType() {
-        Codec<byte[]> base = Codec.STRING.xmap(
-                Base64.getDecoder()::decode, Base64.getEncoder()::encodeToString);
+        Codec<byte[]> base = Codec.STRING.comapFlatMap(
+                NeoForgeJourneyStore::decodeBase64, Base64.getEncoder()::encodeToString);
         return AttachmentType.<byte[]>builder(() -> NONE)
                 //? if >=1.21.6 {
                 .serialize(base.fieldOf("journey"))
                 //?} else
                 /*.serialize(base)*/
                 .build();
+    }
+
+    /**
+     * {@code comapFlatMap} rather than {@code xmap}, because {@code xmap} does not capture
+     * exceptions into the {@link DataResult} — only {@code comapFlatMap} and {@code flatXmap} do.
+     * With {@code xmap} the {@link IllegalArgumentException} that {@code Base64.Decoder} throws on
+     * a payload that is not base64 propagates out of attachment deserialisation instead of becoming
+     * a decode error the platform reports and skips. That read happens on the entity-load path, so
+     * the throw would take the chunk load with it rather than the one cart.
+     *
+     * <p>An error here is the same answer {@code JourneyCodec.decode} gives for bytes it cannot
+     * parse: discard rather than guess. The cart comes back with no attachment, which is DORMANT.
+     *
+     * <p>The message carries the length and not the payload — a corrupt attachment is exactly the
+     * case where the string could be arbitrarily long.
+     */
+    private static DataResult<byte[]> decodeBase64(String encoded) {
+        try {
+            return DataResult.success(Base64.getDecoder().decode(encoded));
+        } catch (IllegalArgumentException e) {
+            return DataResult.error(
+                    () -> "chunkcarts journey attachment is not base64 (" + encoded.length()
+                            + " chars); discarding");
+        }
     }
 
     /**

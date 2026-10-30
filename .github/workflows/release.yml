@@ -20,6 +20,10 @@ name: Release
 # would carry a version of the same name that were not the same event, and the one that silently got
 # nothing is the one nobody checks. So a tag refuses outright rather than uploading to one of them.
 # To rehearse, dispatch this workflow manually and leave dry run on.
+#
+# Manual dispatch is *only* the rehearsal path. A dispatch with dry run off is refused before
+# anything is built, because a branch has no tag for the first paragraph's claim to be checked
+# against. Publishing comes from a tag or it does not happen.
 on:
   push:
     tags: ["v*"]
@@ -34,7 +38,7 @@ permissions:
   contents: write   # creating the GitHub Release
 
 jobs:
-  # Cheap, and first: refuse before spending forty-five build jobs on something that cannot be
+  # Cheap, and first: refuse before spending the whole build matrix on something that cannot be
   # published. Both of these have a way of being noticed only at the upload step otherwise.
   gate:
     name: Check the tag
@@ -55,6 +59,18 @@ jobs:
           MODRINTH_PROJECT_ID: ${{ vars.MODRINTH_PROJECT_ID }}
           CURSEFORGE_PROJECT_ID: ${{ vars.CURSEFORGE_PROJECT_ID }}
         run: |
+          # The tag is what makes "this jar came from this source" checkable, so a publish that
+          # cannot name one is refused outright rather than gated on what is configured. The tag
+          # checks below only run on the tag trigger, which on their own left a dispatch from a
+          # branch with nothing tying it to a public commit — a real release from an arbitrary,
+          # possibly unpushed commit, held back only by dry run happening to default to on.
+          if [ "${{ github.ref_type }}" != "tag" ] && [ "${{ inputs.dry_run }}" != "true" ]; then
+            echo "::error::a real publish must come from a tag; dispatch is for rehearsal only"
+            echo "::error::  ref: ${GITHUB_REF_NAME} (${{ github.ref_type }})"
+            echo "::error::Tag the commit and push the tag, or re-run this dispatch with dry run on."
+            exit 1
+          fi
+
           declared=$(sed -n 's/^version=//p' gradle.properties)
           echo "gradle.properties declares: $declared"
 
@@ -68,6 +84,9 @@ jobs:
               fi ;;
           esac
 
+          # Still conditioned on the tag trigger, and not redundant with the check above: past it,
+          # a non-tag run is a rehearsal, and a rehearsal's ref name is a branch that was never
+          # going to match a version. Dropping the condition would fail every rehearsal.
           if [ "${{ github.ref_type }}" = "tag" ]; then
             tagged="${GITHUB_REF_NAME#v}"
             if [ "$tagged" != "$declared" ]; then
@@ -89,7 +108,9 @@ jobs:
           fi
 
           # A tag means a real release. Refuse one that could only ever half-publish, and refuse it
-          # here rather than after forty-six build jobs. See the note at the top of this file.
+          # here rather than after the whole build matrix. See the note at the top of this file.
+          # Also kept conditional: a rehearsal is expected to run with no tokens configured at all,
+          # and requiring them would make the workflow unrehearsable on a fork or a fresh clone.
           if [ "${{ github.ref_type }}" = "tag" ]; then
             if [ "$HAVE_MODRINTH" != true ] || [ "$HAVE_CURSEFORGE" != true ]; then
               echo "::error::A tagged release needs both MODRINTH_TOKEN and CURSEFORGE_TOKEN."
@@ -136,15 +157,25 @@ jobs:
           merge-multiple: true
           path: dist/
 
-      # Forty-five loader jars and one Bukkit jar. Asserted, because download-artifact is happy to
-      # give you a partial set, and a release that quietly ships forty of them is worse than one
-      # that fails: the missing five look discontinued rather than broken.
+      # How many jars a full build makes, worked out from settings.gradle.kts rather than typed in
+      # here. A hardcoded number is derived from the same list that could be missing a target, so
+      # it agrees with itself no matter what: build_matrix.py reads the list that creates the
+      # Stonecutter nodes, which is the list that decides what exists.
+      - name: Work out how big a full set is
+        run: python3 .github/scripts/build_matrix.py --counts >> "$GITHUB_ENV"
+
+      # Every loader jar and one Bukkit jar. Asserted, because download-artifact is happy to give
+      # you a partial set, and a release that quietly ships forty of them is worse than one that
+      # fails: the missing five look discontinued rather than broken.
       - name: Check the full set arrived
         run: |
           ls -1 dist/
           count=$(find dist -maxdepth 1 -name '*.jar' | wc -l | tr -d ' ')
-          echo "$count jars"
-          test "$count" -eq 46 || { echo "::error::expected 46 jars, found $count"; exit 1; }
+          echo "$count jars, expected $EXPECTED_JARS"
+          test "$count" -eq "$EXPECTED_JARS" || {
+            echo "::error::expected $EXPECTED_JARS jars, found $count"
+            exit 1
+          }
 
       - name: Publish
         env:
@@ -191,8 +222,10 @@ jobs:
             echo
             echo "$verdict"
             echo
-            echo "46 jars: 45 loader targets and one Paper jar."
+            echo "${EXPECTED_JARS:-?} jars: ${LOADER_JARS:-?} loader jars (${TARGET_COUNT:-?}"
+            echo "targets × ${LOADER_COUNT:-?} loaders) and one Paper jar."
             echo
-            echo "Modrinth and the GitHub Release carry all 46. CurseForge carries the 45 loader"
-            echo "jars only — it has no paper/bukkit loader tag, so the Paper jar cannot go there."
+            echo "Modrinth and the GitHub Release carry all ${EXPECTED_JARS:-?}. CurseForge carries"
+            echo "the ${LOADER_JARS:-?} loader jars only — it has no paper/bukkit loader tag, so the"
+            echo "Paper jar cannot go there."
           } >> "$GITHUB_STEP_SUMMARY"

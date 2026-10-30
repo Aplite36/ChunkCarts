@@ -8,6 +8,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -34,6 +35,19 @@ class ConfigReaderTest {
 
     private static Config read(Map<String, Object> yaml) {
         return ConfigReader.read(yaml).builder().build();
+    }
+
+    /**
+     * A map with keys of any type, cast the way {@code ConfigFile.load} casts a parsed document.
+     * That unchecked cast is the whole reason a non-string key reaches this class at all.
+     */
+    @SuppressWarnings("unchecked")
+    private static Map<String, Object> raw(Object... kv) {
+        Map<Object, Object> m = new LinkedHashMap<>();
+        for (int i = 0; i < kv.length; i += 2) {
+            m.put(kv[i], kv[i + 1]);
+        }
+        return (Map<String, Object>) (Map<?, ?>) m;
     }
 
     @Test
@@ -193,6 +207,70 @@ class ConfigReaderTest {
         assertEquals(256, config.journeyBudgetChunks());
         assertTrue(config.metrics());
         assertEquals(2, result.warnings().size(), "one warning per unusable key");
+    }
+
+    @Test
+    @DisplayName("a whole number too large for an int warns and keeps the default")
+    void outOfRangeIntegerWarnsAndKeepsDefault() {
+        // Every YAML parser hands back a Long for an integer this size, and Number.intValue()
+        // wraps rather than failing: 3000000000 lands as -1294967296. resolve() only clamps this
+        // key from above, so a negative budget reaches the engine and kills every journey on its
+        // first poll — the admin asked for a very large budget and got no travel at all.
+        ConfigReader.Result result = ConfigReader.read(map("journey-budget-chunks", 3_000_000_000L));
+
+        assertEquals(Config.defaults().build().journeyBudgetChunks(),
+                result.builder().build().journeyBudgetChunks(),
+                "an unusable value keeps the default; it is never wrapped into a different one");
+        assertTrue(result.warnings().stream().anyMatch(w -> w.contains("journey-budget-chunks")),
+                "and it has to say so, or the budget silently becomes its own opposite");
+    }
+
+    @Test
+    @DisplayName("a key YAML reads as a boolean or a number warns instead of throwing")
+    void nonStringKeyWarnsInsteadOfThrowing() {
+        // The YAML 1.1 resolver applies to keys as well as values, so a bare `off:` key is a
+        // Boolean and `1:` is an Integer before this class ever sees them. Iterating those as
+        // String threw out of read(), which on the mod loaders happens during server startup.
+        Map<String, Object> yaml = raw(
+                Boolean.FALSE, "surprise",
+                42, "surprise",
+                "region-radius", 2,
+                "cart-types", raw(Boolean.TRUE, "surprise", "normal", true));
+
+        ConfigReader.Result result = assertDoesNotThrow(() -> ConfigReader.read(yaml));
+
+        assertEquals(2, result.builder().build().regionRadius(),
+                "the keys that were readable are still read");
+        assertTrue(result.builder().build().allowedCartTypes().contains(CartType.NORMAL));
+        assertTrue(result.warnings().stream().anyMatch(w -> w.contains("'false'")),
+                "the bad key is reported the way it looks in the file");
+        assertTrue(result.warnings().stream().anyMatch(w -> w.contains("'42'")));
+        assertTrue(result.warnings().stream().anyMatch(w -> w.contains("cart-types.true")),
+                "a section's keys are no safer than the top level's");
+    }
+
+    @Test
+    @DisplayName("a duration too large to be measured warns and keeps the default")
+    void overlargeDurationWarnsAndKeepsDefault() {
+        // Duration.ofHours succeeds far past what toMillis() can represent, and every setting
+        // here is read through toMillis() at use — journey-cooldown from inside the departure
+        // gate, on every attempt. Left to construct, it throws there instead of warning here.
+        assertThrows(IllegalArgumentException.class,
+                () -> ConfigReader.parseDuration("999999999999999h"));
+        assertThrows(IllegalArgumentException.class,
+                () -> ConfigReader.parseDuration("99999999999999999"));
+        assertThrows(IllegalArgumentException.class,
+                () -> ConfigReader.parseDuration(Long.MAX_VALUE + "h"),
+                "the largest values overflow inside ofHours itself, before toMillis is reached");
+
+        ConfigReader.Result result =
+                ConfigReader.read(map("journey-cooldown", "999999999999999h"));
+
+        assertEquals(Config.defaults().build().journeyCooldown(),
+                result.builder().build().journeyCooldown());
+        assertTrue(result.warnings().stream().anyMatch(w -> w.contains("journey-cooldown")));
+        assertDoesNotThrow(() -> result.builder().build().journeyCooldown().toMillis(),
+                "whatever survives this reader has to be usable where it is used");
     }
 
     @Test

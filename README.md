@@ -190,12 +190,19 @@ attach to. Rename it and the claim stays attached to the thing that actually mak
 
 ## Metrics
 
-ChunkCarts reports anonymous statistics to [bStats](https://bstats.org): server software, game
-version, player count, and which `enforcement` and `departure-requirement` settings you use.
+ChunkCarts reports anonymous statistics to [bStats](https://bstats.org). The payload is bStats'
+standard environment fields, the ones every plugin on the server already sends: server software,
+game version, player count, online-mode setting, Java version, host OS name/architecture/version,
+and CPU core count. Alongside those, ChunkCarts reports its own version and which `enforcement` and
+`departure-requirement` settings you use.
 
 No player data, no world data, no IP addresses, no coordinates. The two settings are collected for
 one reason — deciding which platforms and game versions are worth carrying, and whether anyone
 actually uses permissive mode, from evidence instead of guesswork.
+
+bStats' own Server Software chart only recognises Bukkit-family names, so a Fabric, NeoForge or
+Forge server renders there as "Unknown". ChunkCarts reports a second `platform` chart with the same
+server-software value, so those installs show up correctly somewhere on the dashboard.
 
 Set `metrics: false` to opt out, or disable bStats globally on your server.
 
