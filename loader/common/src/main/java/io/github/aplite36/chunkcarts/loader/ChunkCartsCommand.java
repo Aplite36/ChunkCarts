@@ -96,6 +96,15 @@ public final class ChunkCartsCommand {
         // cost of writing it twice is that the two can drift, which is the whole of #30 — so they
         // are compared here instead, and a subcommand registered without a help line (or the
         // reverse) fails at registration rather than at whatever point someone runs help.
+        requireMatchesHelp(name, root);
+        return root;
+    }
+
+    /**
+     * Throws unless {@code root}'s direct children are exactly {@link CommandHelp#SUBCOMMANDS}.
+     * Package-private and static so the check can be tested on a tree that is wrong on purpose.
+     */
+    static void requireMatchesHelp(String name, LiteralArgumentBuilder<?> root) {
         Set<String> registered = root.getArguments().stream()
                 .map(CommandNode::getName)
                 .collect(Collectors.toCollection(TreeSet::new));
@@ -104,7 +113,6 @@ public final class ChunkCartsCommand {
                     + " but CommandHelp lists " + new TreeSet<>(CommandHelp.SUBCOMMANDS)
                     + "; the two have to match");
         }
-        return root;
     }
 
     /**
