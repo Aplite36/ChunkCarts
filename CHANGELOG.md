@@ -77,9 +77,38 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   accepting any version ever released. Installing a jar on an older loader is refused with a clear
   message rather than loading and then failing on a missing method with nothing to say why. The
   release checks now assert this, so it cannot quietly return.
+- A TNT, command block or spawner minecart parked against a cart that is about to depart no longer
+  travels with it. Only the cart at the front of a group was checked against the permitted types,
+  and whatever was touching it came along unexamined — chunks held for it, its whole route loaded.
+  These three types can never be enabled in the config, and standing next to something that can is
+  no longer a way around that.
+- Breaking the front cart of a travelling group now ends the journey properly for the carts left
+  behind. Their chunks were released and the journey dropped, but each survivor kept a saved record
+  that still said it was travelling, so the next time one of them unloaded and loaded again the
+  finished journey came back — re-holding its area without spending any of the travel budget or
+  needing a fresh departure. This is the other side of the group fix above, which covered a
+  follower being broken but not the lead.
 - A `cart-types` entry that is not `true` or `false` is now reported as disabling that cart type,
   which is what actually happens. The warning previously said the default was used, telling an
   admin the opposite of what became of the cart type they were trying to debug.
+- A whole number too large to be one is now a warning instead of a silently different setting.
+  `journey-budget-chunks: 3000000000` was applied as `-1294967296`, so every journey died on its
+  first check with nothing in the log connecting the two. Out-of-range values now fall back to the
+  default and say so, and `journey-budget-chunks`, `progress-slack-chunks` and
+  `max-concurrent-journeys` have a floor of 1 in both enforcement modes.
+- A config key that YAML reads as something other than text no longer stops the plugin loading. A
+  bare `on`, `off`, `yes`, `no`, `y` or `n` key, or a numeric one, is a boolean or a number to
+  every YAML parser, and the reader threw on it instead of warning — on the mod loaders, during
+  server startup, which took the server down with it. Such a key is now reported as unrecognised,
+  like any other typo.
+- A duration too large to be measured in milliseconds is now refused at load. `journey-cooldown:
+  999999999999999h` parsed cleanly and then threw on every departure attempt, forever, so no cart
+  ever set off. It now falls back to the default with a warning, and `journey-cooldown` is capped
+  at 24h in STRICT mode alongside the other durations.
+- `region-radius: 0` is no longer accepted. It held the cart's own chunk and nothing else, so the
+  cart stopped at the first chunk boundary; it tore apart any group of carts straddling one; and
+  it pinned the travel loop to a check every tick while `/chunkcarts list` blamed cart speed. The
+  minimum is now 1, in both enforcement modes, and a lower value is raised with a warning.
 
 ## [0.1.0] - 2026-07-27
 
