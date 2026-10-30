@@ -148,6 +148,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   cart stopped at the first chunk boundary; it tore apart any group of carts straddling one; and
   it pinned the travel loop to a check every tick while `/chunkcarts list` blamed cart speed. The
   minimum is now 1, in both enforcement modes, and a lower value is raised with a warning.
+- `/chunkcarts why` now gives the right block for a cart at a negative coordinate. The position
+  was rounded toward zero, so a cart at x -0.5 was reported at 0, one block east of where it was.
 
 ## [0.1.0] - 2026-07-27
 
