@@ -1,0 +1,102 @@
+name: Chunks stay loaded on a loop
+description: >-
+  You found a track shape that keeps chunks loaded indefinitely on default settings. This is the
+  single most valuable report ChunkCarts can receive — please read the README's "Verify it
+  yourself" section first, since the fields below are exactly its checklist.
+title: "[loop] "
+labels:
+  - bug
+  - loop-detection
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Before filing, walk through **Verify it yourself** in the README:
+        https://github.com/Aplite36/ChunkCarts#verify-it-yourself
+
+        It takes about five minutes and turns a vague "carts keep loading chunks" report into a
+        real reproduction. The fields below ask for exactly what those steps produce.
+
+  - type: input
+    id: platform-version
+    attributes:
+      label: Platform and game version
+      description: e.g. "Paper 1.21.11", "Fabric 1.21.3", "NeoForge 26.1"
+      placeholder: Paper 1.21.11
+    validations:
+      required: true
+
+  - type: dropdown
+    id: enforcement
+    attributes:
+      label: Enforcement mode
+      options:
+        - STRICT (default)
+        - PERMISSIVE
+    validations:
+      required: true
+
+  - type: textarea
+    id: track-shape
+    attributes:
+      label: Track shape
+      description: >-
+        Describe or diagram the layout that keeps chunks loaded: loop, figure eight,
+        there-and-back shuttle, its rough size, whether it uses redstone or a self-propelled
+        furnace cart.
+    validations:
+      required: true
+
+  - type: dropdown
+    id: sim-distance
+    attributes:
+      label: Was simulation-distance lowered before testing?
+      description: >-
+        README step 1: set simulation-distance=2 in server.properties. This is the step people
+        skip, and skipping it is what makes the loop detector's own loading indistinguishable
+        from a player's — without it, this report can't be confirmed either way.
+      options:
+        - "Yes — simulation-distance was 2 (or similarly low) for this test"
+        - "No — tested at normal simulation-distance"
+        - Not sure
+    validations:
+      required: true
+
+  - type: textarea
+    id: list-output
+    attributes:
+      label: "/chunkcarts list output"
+      description: Paste it while the chunks are still held.
+      render: text
+    validations:
+      required: true
+
+  - type: dropdown
+    id: slack-exhausted
+    attributes:
+      label: Did SLACK_EXHAUSTED appear in the log?
+      description: >-
+        Look for a "Journey ended: SLACK_EXHAUSTED" line — that's the loop detector firing. If it
+        fired and chunks stayed held anyway, that's the bug.
+      options:
+        - "Yes, and chunks were released as expected"
+        - "Yes, but chunks stayed held"
+        - "No, it never appeared"
+        - Not sure / didn't check
+    validations:
+      required: true
+
+  - type: textarea
+    id: log
+    attributes:
+      label: Relevant log lines
+      description: Any "Journey ended" lines, warnings, or errors around the time chunks stayed loaded.
+      render: text
+
+  - type: textarea
+    id: extra
+    attributes:
+      label: Anything else
+      description: >-
+        Non-default config.yml settings, other plugins or mods that move minecarts, anything
+        else that seems relevant.
