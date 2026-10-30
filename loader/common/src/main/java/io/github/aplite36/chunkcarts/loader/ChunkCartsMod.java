@@ -1,6 +1,7 @@
 package io.github.aplite36.chunkcarts.loader;
 
 import io.github.aplite36.chunkcarts.core.ChunkCartsEngine;
+import io.github.aplite36.chunkcarts.core.ConfigSwap;
 
 /**
  * What {@code /chunkcarts} needs from whichever loader's entry point is running.
@@ -27,6 +28,12 @@ public interface ChunkCartsMod {
     /** Flips verbose logging and returns the new state. */
     boolean toggleDebug();
 
-    /** Tears the runtime down and builds it again from the file on disk. */
-    void reloadRuntime();
+    /**
+     * Rebuilds the runtime from the file on disk.
+     *
+     * <p>The config is read and validated first, so a reload that cannot produce a working
+     * replacement leaves the one already running untouched. The three outcomes need three different
+     * things said to whoever ran the command, which is why this returns one rather than nothing.
+     */
+    ConfigSwap.Outcome reloadRuntime();
 }
