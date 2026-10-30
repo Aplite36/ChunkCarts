@@ -25,7 +25,6 @@ public final class FakeCart implements CartView {
     private int itemCount;
     private byte[] state;
     private int writes;
-    private UUID lastInteractor;
 
     public FakeCart(WorldId world) {
         this.world = world;
@@ -45,7 +44,6 @@ public final class FakeCart implements CartView {
     @Override public int itemCount() { return itemCount; }
     @Override public Optional<byte[]> readState() { return Optional.ofNullable(state); }
     @Override public void writeState(byte[] s) { this.state = s; this.writes++; }
-    @Override public Optional<UUID> lastInteractor() { return Optional.ofNullable(lastInteractor); }
 
     /** Places the cart at the centre of the given chunk. */
     public FakeCart atChunk(int cx, int cz) {
@@ -81,7 +79,6 @@ public final class FakeCart implements CartView {
     public FakeCart type(CartType t) { this.type = t; return this; }
     public FakeCart itemCount(int n) { this.itemCount = n; return this; }
     public FakeCart world(WorldId w) { this.world = w; return this; }
-    public FakeCart lastInteractor(UUID player) { this.lastInteractor = player; return this; }
 
     /** Raw state injection, for testing what happens to an unparseable payload. */
     public FakeCart rawState(byte[] bytes) { this.state = bytes; return this; }

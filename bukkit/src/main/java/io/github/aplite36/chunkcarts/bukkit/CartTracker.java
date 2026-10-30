@@ -93,7 +93,7 @@ final class CartTracker {
     }
 
     BukkitCartView view(Minecart cart) {
-        return new BukkitCartView(cart, stateKey, lastInteractor.get(cart.getUniqueId()));
+        return new BukkitCartView(cart, stateKey);
     }
 
     /** One turn of the travel loop. Runs on the main thread, on the scheduler's interval. */

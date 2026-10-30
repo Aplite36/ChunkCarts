@@ -96,7 +96,7 @@ public final class CartTracker {
     }
 
     LevelCartView view(AbstractMinecart cart) {
-        return new LevelCartView(cart, lastInteractor.get(cart.getUUID()), journeys);
+        return new LevelCartView(cart, journeys);
     }
 
     /** One turn of the travel loop. Runs on the server thread, on the scheduler's interval. */

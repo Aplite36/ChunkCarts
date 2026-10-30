@@ -5,7 +5,12 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 import java.time.Duration;
+import java.util.Arrays;
+import java.util.LinkedHashSet;
+import java.util.Set;
+import java.util.stream.Collectors;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -157,46 +162,45 @@ class TokenTest extends EngineTest {
     }
 
     @Test
-    @DisplayName("proximity without interaction does not waive the cooldown — the AFK guard")
-    void proximityWithoutInteractionDoesNotWaiveCooldown() {
-        cfg.journeyCooldown(Duration.ofMinutes(10));
-        FakeCart cart = FakeCart.at(OVERWORLD, 0, 0);
-        departWithToken(cart);
-        engine().shutdown();
-
-        clock.advance(Duration.ofSeconds(30));
-        engine().record(cart.id(), CartEvent.PLAYER_NEARBY);
-
-        grantToken(cart);
-        assertDenied(depart(cart), DenialReason.COOLDOWN);
-    }
-
-    @Test
-    @DisplayName("hopper insertion is not interaction")
-    void hopperInsertionIsNotInteraction() {
+    @DisplayName("a cart nothing interacted with keeps its cooldown — the AFK-dispenser guard")
+    void aCartNothingInteractedWithKeepsItsCooldown() {
+        // This is the path a dispenser-fired cart actually takes. It reaches track() and nothing
+        // else: no adapter registers a hopper or dispenser listener, so no record() call is ever
+        // made for it and no waiver is set.
+        //
+        // Three tests used to stand here instead, feeding the engine HOPPER_INSERT,
+        // DISPENSER_DISPATCH and PLAYER_NEARBY and asserting nothing changed. record() only acts
+        // when isInteraction() is true, so they asserted that values nothing produces do nothing,
+        // and could not fail. This one can: waive the cooldown for a cart with no interaction and
+        // it goes red.
         cfg.journeyCooldown(Duration.ofMinutes(10));
         FakeCart cart = FakeCart.at(OVERWORLD, 0, 0).type(CartType.HOPPER);
         departWithToken(cart);
         engine().shutdown();
 
-        engine().record(cart.id(), CartEvent.HOPPER_INSERT);
+        clock.advance(Duration.ofSeconds(30));
 
         grantToken(cart);
         assertDenied(depart(cart), DenialReason.COOLDOWN);
     }
 
     @Test
-    @DisplayName("dispenser dispatch is not interaction")
-    void dispenserDispatchIsNotInteraction() {
-        cfg.journeyCooldown(Duration.ofMinutes(10));
-        FakeCart cart = FakeCart.at(OVERWORLD, 0, 0);
-        departWithToken(cart);
-        engine().shutdown();
-
-        engine().record(cart.id(), CartEvent.DISPENSER_DISPATCH);
-
-        grantToken(cart);
-        assertDenied(depart(cart), DenialReason.COOLDOWN);
+    @DisplayName("every cart event is classified, so adding one is a decision made in core")
+    void everyCartEventIsClassified() {
+        // The point of routing events through core rather than letting each adapter decide is that
+        // a new event has to be classified in one place. This fails on any constant added without
+        // being listed, which is what makes that true rather than merely intended.
+        assertEquals(
+                Set.of(CartEvent.RIGHT_CLICK, CartEvent.INVENTORY_OPEN, CartEvent.PLACEMENT),
+                Arrays.stream(CartEvent.values()).filter(CartEvent::isInteraction)
+                        .collect(Collectors.toCollection(LinkedHashSet::new)),
+                "these three waive the cooldown");
+        assertEquals(
+                Set.of(),
+                Arrays.stream(CartEvent.values()).filter(event -> !event.isInteraction())
+                        .collect(Collectors.toCollection(LinkedHashSet::new)),
+                "nothing else is emitted by any adapter; a dispenser dispatch is handled by not "
+                        + "listening for it, not by classifying it");
     }
 
     @Test

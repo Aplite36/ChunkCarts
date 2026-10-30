@@ -49,13 +49,8 @@ public interface CartView {
 
     void writeState(byte[] state);
 
-    /**
-     * The last player to interact with this cart, used for the cooldown waiver and
-     * optional stranding notification.
-     *
-     * <p>Interaction means a right-click, an inventory open, or placement. Hopper insertion,
-     * dispenser dispatch, and a player merely standing nearby are not interaction — that
-     * distinction is what stops an AFK player beside a dispenser from cycling a cart forever.
-     */
-    Optional<UUID> lastInteractor();
+    // No lastInteractor() here. It was implemented on both platforms and called by nothing:
+    // notify-last-interactor is served by each CartTracker's own map, read directly where the
+    // message is sent. Every view built for a poll paid a map lookup to populate a field no one
+    // read, and the doc on it described a cooldown rule that CartEvent, not this, decides.
 }

@@ -7,6 +7,23 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed
+
+- The AFK-dispenser guard is now documented as what it is. `CartEvent` carried `HOPPER_INSERT`,
+  `DISPENSER_DISPATCH` and `PLAYER_NEARBY`, classified as not-interaction, and said that
+  classification was what stopped an AFK player beside a dispenser cycling a cart forever. No
+  adapter ever emitted any of the three, so it decided nothing, and the three tests that named the
+  policy passed by feeding the engine values nothing produces. What actually holds the guard up is
+  that no adapter listens for a hopper or a dispenser at all, so a dispenser-fired cart gets no
+  waiver and keeps its cooldown. The three constants and the three tests are gone, replaced by one
+  that exercises the path a dispenser really takes. No behaviour changes.
+
+### Removed
+
+- `CartView.lastInteractor()`, which was implemented on both platforms and called by nothing.
+  `notify-last-interactor` is served by each tracker's own map, read where the message is sent, so
+  every cart view built for a poll was paying a map lookup to fill a field no one read.
+
 ### Fixed
 
 - A failed `/chunkcarts reload` no longer leaves the mod dead. The command tore the runtime down

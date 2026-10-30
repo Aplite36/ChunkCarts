@@ -36,12 +36,10 @@ import java.util.UUID;
 final class LevelCartView implements CartView {
 
     private final AbstractMinecart cart;
-    private final UUID lastInteractor;
     private final JourneyStore journeys;
 
-    LevelCartView(AbstractMinecart cart, UUID lastInteractor, JourneyStore journeys) {
+    LevelCartView(AbstractMinecart cart, JourneyStore journeys) {
         this.cart = cart;
-        this.lastInteractor = lastInteractor;
         this.journeys = journeys;
     }
 
@@ -186,8 +184,4 @@ final class LevelCartView implements CartView {
         journeys.write(cart, state);
     }
 
-    @Override
-    public Optional<UUID> lastInteractor() {
-        return Optional.ofNullable(lastInteractor);
-    }
 }
