@@ -108,9 +108,9 @@ One permission, `chunkcarts.admin`, which operators have by default. `/ccarts` w
 ## Termination reasons
 
 Every journey that ends logs one line: `Journey ended: <REASON> — <type> at <world> x,y,z`,
-whenever `stranded.log` is on (the default). `/chunkcarts list` shows the same reason for anything
-still stranded mid-route. Nine reasons exist, and an admin seeing one in the log needs to know
-whether it is a problem or the mod doing its job:
+whenever `stranded.log` is on (the default). `/chunkcarts why` shows the last termination reason
+for the cart you are looking at. Nine reasons exist, and an admin seeing one needs to know whether
+it is a problem or the mod doing its job:
 
 | Reason | What it means | What to do |
 | --- | --- | --- |
