@@ -406,15 +406,63 @@ public final class ChunkCartsEngine {
     }
 
     /**
-     * Releases anything held on behalf of a cart that no longer exists.
+     * Tells the engine a cart has left the server's view.
      *
+     * @param cause what happened to it. Only a destruction ends anything. A cart that unloaded or
+     *              went through a portal still exists and still carries its journey on the entity,
+     *              and ending the journey for its cluster here wrote DORMANT to every follower of a
+     *              lead that crossed a portal first, while the lead resumed on the far side alone
      * @param views resolves a cart still on the server to a live view, or null if it has gone
      *              too. Losing a cluster's lead ends the journey for its followers, and ending a
      *              journey means writing DORMANT back to the carts it leaves behind — which cannot
      *              be done from a UUID alone, hence the lookup. It is consulted only for the
-     *              survivors of a cluster, so the common case of a solitary cart never calls it
+     *              survivors of a destroyed lead, so the common case of a solitary cart never
+     *              calls it
      */
-    public void onCartRemoved(UUID cartId, Function<UUID, CartView> views) {
+    public void onCartRemoved(UUID cartId, RemovalCause cause, Function<UUID, CartView> views) {
+        Objects.requireNonNull(cause, "cause");
+        if (cause == RemovalCause.DESTROYED) {
+            onCartDestroyed(cartId, views);
+        } else {
+            onCartAway(cartId, cause);
+        }
+        carts.remove(cartId);
+        // Both maps answer /chunkcarts why, which only asks about carts the tracker still has. An
+        // entry for a cart that is gone is never read: a destroyed cart never comes back, and an
+        // unloaded one is re-registered through restore and re-gated on the next poll. Kept, they
+        // grew by one entry for every cart that ever unloaded.
+        lastTermination.remove(cartId);
+        lastDenial.remove(cartId);
+    }
+
+    /**
+     * A cart that still exists somewhere the engine cannot see: an unloaded chunk, or the far side
+     * of a portal. Its journey is left as it is, members and all, because the cart comes back
+     * through {@link #restore}, which finds the journey still in the index and rejoins it.
+     *
+     * <p>The one thing let go is the region of a journey whose lead unloaded. Nothing moves that
+     * journey forward until the lead is back, and the lead's own chunk unloading means nothing was
+     * keeping it loaded, so holding the rest of the region would only keep terrain loaded for a
+     * cart that is not in it. Restore re-holds the lead's region when it loads. A lead that changed
+     * dimension keeps everything: it is in the destination world before the next poll, and its
+     * followers still need the ground between them and the portal.
+     */
+    private void onCartAway(UUID cartId, RemovalCause cause) {
+        UUID journeyId = journeyByCart.get(cartId);
+        if (journeyId == null) {
+            return;
+        }
+        Journey journey = journeys.get(journeyId);
+        if (journey == null) {
+            journeyByCart.remove(cartId);
+            return;
+        }
+        if (cause == RemovalCause.UNLOADED && cartId.equals(journey.lead)) {
+            releaseAll(journey);
+        }
+    }
+
+    private void onCartDestroyed(UUID cartId, Function<UUID, CartView> views) {
         UUID journeyId = journeyByCart.get(cartId);
         if (journeyId != null) {
             Journey journey = journeys.get(journeyId);
@@ -450,13 +498,6 @@ public final class ChunkCartsEngine {
                 journeyByCart.remove(cartId);
             }
         }
-        carts.remove(cartId);
-        // Both maps answer /chunkcarts why, which only asks about carts the tracker still has. An
-        // entry for a cart that is gone is never read: a destroyed cart never comes back, and an
-        // unloaded one is re-registered through restore and re-gated on the next poll. Kept, they
-        // grew by one entry for every cart that ever unloaded.
-        lastTermination.remove(cartId);
-        lastDenial.remove(cartId);
     }
 
     /** Releases every ticket and flushes state. Called on disable, or chunks leak until restart. */
@@ -535,6 +576,9 @@ public final class ChunkCartsEngine {
         ChunkPos leadChunk = chunkOf(lead);
         JourneyState stateBefore = journey.state;
 
+        if (!lead.world().equals(journey.lastChunk.world())) {
+            journey.portalEntry = journey.lastChunk;  // the lead has just come through a portal
+        }
         dropDrifters(journey, lead, leadChunk, views);
 
         // Re-checks that still apply in flight. World before dimension: a cart crossing into an
@@ -703,8 +747,18 @@ public final class ChunkCartsEngine {
             if (member == null) {
                 continue;
             }
-            boolean drifted = !member.world().equals(lead.world())
-                    || chunkOf(member).chebyshevTo(leadChunk) > config.regionRadius();
+            boolean drifted;
+            if (member.world().equals(lead.world())) {
+                drifted = chunkOf(member).chebyshevTo(leadChunk) > config.regionRadius();
+            } else {
+                // Still on the near side of the portal the lead went through. A train crosses one
+                // cart at a time, so for a poll or two after the lead is through the rest of it is
+                // here, and measured against the lead it would all count as drifted. It is held to
+                // where the lead left instead, which still drops a cart that wanders off.
+                ChunkPos entry = journey.portalEntry;
+                drifted = entry == null || !member.world().equals(entry.world())
+                        || chunkOf(member).chebyshevTo(entry) > config.regionRadius();
+            }
             if (!drifted) {
                 continue;
             }

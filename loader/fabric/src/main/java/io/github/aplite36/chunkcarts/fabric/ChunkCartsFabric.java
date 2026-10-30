@@ -366,7 +366,7 @@ public final class ChunkCartsFabric implements ModInitializer, ChunkCartsMod {
 
     private void onEntityUnload(Entity entity, ServerLevel level) {
         if (tracker != null && entity instanceof AbstractMinecart cart) {
-            tracker.untrack(cart.getUUID());
+            tracker.untrack(cart);
         }
     }
 
