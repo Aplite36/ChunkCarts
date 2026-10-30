@@ -541,7 +541,7 @@ public final class ChunkCartsForge implements ChunkCartsMod {
     private void onEntityUnload(EntityLeaveLevelEvent event) {
         if (tracker != null && !event.getLevel().isClientSide()
                 && event.getEntity() instanceof AbstractMinecart cart) {
-            tracker.untrack(cart.getUUID());
+            tracker.untrack(cart);
         }
     }
 

@@ -3,12 +3,14 @@ package io.github.aplite36.chunkcarts.loader;
 import io.github.aplite36.chunkcarts.core.CartEvent;
 import io.github.aplite36.chunkcarts.core.ChunkCartsEngine;
 import io.github.aplite36.chunkcarts.core.DepartureOutcome;
+import io.github.aplite36.chunkcarts.core.RemovalCause;
 import io.github.aplite36.chunkcarts.core.TerminationReason;
 import io.github.aplite36.chunkcarts.core.WhyReport;
 import io.github.aplite36.chunkcarts.core.platform.CartView;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.entity.Entity;
 //? if >=1.21.11 {
 import net.minecraft.world.entity.vehicle.minecart.AbstractMinecart;
 //?} else
@@ -80,18 +82,30 @@ public final class CartTracker {
     }
 
     /**
-     * Drops a cart the server no longer has, releasing anything held for it.
-     *
-     * <p>Called for an unloaded cart as well as a destroyed one. Releasing is the safe direction in
-     * both cases: the journey lives in the cart's own persistent data, so an unloaded cart
-     * re-registers itself when its chunk comes back, whereas a journey whose lead has quietly
-     * vanished would hold its region until the ticket expires.
+     * Drops a cart the level no longer has. Called for a destroyed cart, an unloaded one and one
+     * that went through a portal, and the entity's removal reason decides what happens to its
+     * journey: only a destroyed cart ends anything. The other two come back through {@link #track},
+     * from their own persistent data, and rejoin the journey they left.
      */
-    public void untrack(UUID cartId) {
+    public void untrack(AbstractMinecart cart) {
+        UUID cartId = cart.getUUID();
         if (tracked.remove(cartId) != null) {
-            engine.onCartRemoved(cartId, this::viewOrNull);
+            engine.onCartRemoved(cartId, causeOf(cart.getRemovalReason()), this::viewOrNull);
         }
         lastInteractor.remove(cartId);
+    }
+
+    /**
+     * Read through {@code shouldDestroy()} rather than by constant, so a reason a later version adds
+     * still lands on the right side. A cart with no reason at all is treated as destroyed, which is
+     * what every removal meant before causes were passed on.
+     */
+    static RemovalCause causeOf(Entity.RemovalReason reason) {
+        if (reason == null || reason.shouldDestroy()) {
+            return RemovalCause.DESTROYED;
+        }
+        return reason == Entity.RemovalReason.CHANGED_DIMENSION
+                ? RemovalCause.CHANGED_DIMENSION : RemovalCause.UNLOADED;
     }
 
     /**
@@ -156,7 +170,7 @@ public final class CartTracker {
         List<CartView> views = new ArrayList<>(tracked.size());
         for (AbstractMinecart cart : List.copyOf(tracked.values())) {
             if (cart.isRemoved()) {
-                untrack(cart.getUUID());
+                untrack(cart);
                 continue;
             }
             views.add(view(cart));

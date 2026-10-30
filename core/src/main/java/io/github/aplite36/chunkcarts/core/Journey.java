@@ -33,6 +33,14 @@ final class Journey {
     ChunkPos lastChunk;
 
     /**
+     * The lead's last chunk in the world it left through a portal, or null before it has crossed.
+     * Followers reach the portal after the lead does, and until they have crossed too this is what
+     * the drift leash measures them against. Not persisted: a restart mid-crossing re-forms the
+     * cluster from whichever carts come back, and the leash then drops the ones left behind.
+     */
+    ChunkPos portalEntry;
+
+    /**
      * Epoch millis of the last chunk change. <strong>Never persisted</strong> and reset to now on
      * restore — it measures standing still while we were watching, and downtime is not that.
      */
