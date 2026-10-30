@@ -39,6 +39,38 @@ class EnforcementModeTest extends EngineTest {
     }
 
     @Test
+    @DisplayName("PERMISSIVE mode still requires a departure token")
+    void permissiveModeStillRequiresDepartureToken() {
+        cfg.enforcement(EnforcementMode.PERMISSIVE);
+        FakeCart cart = FakeCart.at(OVERWORLD, 0, 0);
+
+        assertDenied(depart(cart), DenialReason.NO_TOKEN);
+    }
+
+    @Test
+    @DisplayName("PERMISSIVE mode still enforces the cooldown")
+    void permissiveModeStillEnforcesCooldown() {
+        cfg.enforcement(EnforcementMode.PERMISSIVE).journeyCooldown(Duration.ofMinutes(10));
+        FakeCart cart = FakeCart.at(OVERWORLD, 0, 0);
+        departWithToken(cart);
+        travelStraight(cart, 2);
+        engine().shutdown();
+
+        grantToken(cart);
+        assertDenied(depart(cart), DenialReason.COOLDOWN);
+    }
+
+    @Test
+    @DisplayName("PERMISSIVE mode still enforces the cart-type list")
+    void permissiveModeStillEnforcesCartTypeList() {
+        cfg.enforcement(EnforcementMode.PERMISSIVE);
+        FakeCart cart = FakeCart.at(OVERWORLD, 0, 0).type(CartType.SPAWNER);
+        grantToken(cart);
+
+        assertDenied(depart(cart), DenialReason.CART_TYPE_FORBIDDEN);
+    }
+
+    @Test
     @DisplayName("STRICT clamps excessive slack")
     void strictModeClampsExcessiveSlack() {
         var resolved = resolveStrict(Config.defaults().progressSlackChunks(5000));
