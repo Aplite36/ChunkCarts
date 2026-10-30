@@ -9,6 +9,16 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- `/chunkcarts list` now colours the held-chunk load level red unless every chunk is
+  `ENTITY_TICKING`. That tally is the only in-game evidence for the one claim no unit test can
+  reach — that the chunks the mod holds are actually ticking — and it rendered as plain text, so
+  `(TICKING x9)` and `(ENTITY_TICKING x9)` were the same shape and nobody noticed the difference.
+  Anything other than `ENTITY_TICKING` means carts sit motionless in loaded chunks.
+- `/chunkcarts list` also reports the tally when there are no active journeys but chunks are still
+  held, which is the leak shape and previously the one case where the number was hidden; names
+  where each cluster is *now* rather than only where it set off, which could be thousands of blocks
+  behind it; and pages, at eight rows a page, so the header carrying the totals is not the first
+  line to scroll away on a busy server.
 - `/chunkcarts help`, on every platform, listing each subcommand and what it is for rather than
   just naming them. There was no help before, and what an unrecognised word did depended on which
   jar you had installed: Paper printed a usage line for anything it did not recognise, so

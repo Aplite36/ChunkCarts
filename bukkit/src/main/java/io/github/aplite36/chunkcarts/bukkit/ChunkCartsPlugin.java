@@ -4,6 +4,7 @@ import io.github.aplite36.chunkcarts.core.ChunkCartsEngine;
 import io.github.aplite36.chunkcarts.core.Config;
 import io.github.aplite36.chunkcarts.core.ConfigSwap;
 import io.github.aplite36.chunkcarts.metrics.ChunkCartsMetrics;
+import org.bukkit.Chunk;
 import org.bukkit.NamespacedKey;
 import org.bukkit.World;
 import org.bukkit.configuration.ConfigurationSection;
@@ -112,6 +113,18 @@ public final class ChunkCartsPlugin extends JavaPlugin {
         return tickets.heldLevels().entrySet().stream()
                 .map(e -> e.getKey() + " x" + e.getValue())
                 .collect(java.util.stream.Collectors.joining(", "));
+    }
+
+    /**
+     * Whether every held chunk is at {@code ENTITY_TICKING}, which is the only level at which a
+     * cart inside one actually moves. Separate from {@link #heldChunkLevels()} rather than derived
+     * from it, because the two platforms tally different enum types and the command would
+     * otherwise have to parse a string to find out whether to sound an alarm.
+     */
+    boolean heldChunksAllTicking() {
+        return tickets == null
+                || tickets.heldLevels().keySet().stream()
+                        .allMatch(level -> level == Chunk.LoadLevel.ENTITY_TICKING);
     }
 
     boolean toggleDebug() {

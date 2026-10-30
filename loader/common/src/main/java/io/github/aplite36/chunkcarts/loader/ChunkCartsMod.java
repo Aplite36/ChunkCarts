@@ -25,6 +25,16 @@ public interface ChunkCartsMod {
     /** A tally of the load levels of the chunks currently held, as {@code ENTITY_TICKING x9}. */
     String heldChunkLevels();
 
+    /**
+     * Whether every held chunk is at {@code ENTITY_TICKING}, which is the only level at which a
+     * cart inside one actually moves.
+     *
+     * <p>Separate from {@link #heldChunkLevels()} rather than derived from it, because the two
+     * platforms tally different enum types and the command would otherwise have to parse a string
+     * to find out whether to sound an alarm.
+     */
+    boolean heldChunksAllTicking();
+
     /** Flips verbose logging and returns the new state. */
     boolean toggleDebug();
 
