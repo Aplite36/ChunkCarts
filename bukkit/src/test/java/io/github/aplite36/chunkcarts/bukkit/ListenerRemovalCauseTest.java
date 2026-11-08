@@ -7,10 +7,8 @@ import org.bukkit.World;
 import org.bukkit.entity.ArmorStand;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.Minecart;
-import org.bukkit.event.world.EntitiesUnloadEvent;
 import org.junit.jupiter.api.Test;
 
-import java.util.List;
 import java.util.UUID;
 
 import static org.mockito.ArgumentMatchers.any;
@@ -21,14 +19,15 @@ import static org.mockito.Mockito.when;
 
 /**
  * {@link ChunkCartsListener#onEntityRemove}: the removal event carries no cause on this API, so the
- * listener works one out, and only a destroyed cart may be reported as destroyed.
+ * listener reads one off the cart, and only a destroyed cart may be reported as destroyed.
+ *
+ * <p>Each case is the state a live Paper 1.21.11 server showed at removal time.
  */
 class ListenerRemovalCauseTest {
 
     private final CartTracker tracker = mock(CartTracker.class);
-    private int tick = 100;
     private final ChunkCartsListener listener =
-            new ChunkCartsListener(mock(ChunkCartsEngine.class), tracker, () -> tick);
+            new ChunkCartsListener(mock(ChunkCartsEngine.class), tracker);
 
     private final World overworld = mock(World.class);
     private final World nether = mock(World.class);
@@ -47,54 +46,28 @@ class ListenerRemovalCauseTest {
         return event;
     }
 
-    private void unloading(Entity... entities) {
-        EntitiesUnloadEvent event = mock(EntitiesUnloadEvent.class);
-        when(event.getEntities()).thenReturn(List.of(entities));
-        listener.onEntitiesUnload(event);
-    }
-
     @Test
-    void aCartRemovedFromTheWorldItIsInIsDestroyed() {
+    void aDeadCartIsDestroyed() {
+        // /kill, /damage, a player breaking it: all dead by the time the removal fires.
+        when(cart.isDead()).thenReturn(true);
+
         listener.onEntityRemove(removedFrom(cart, overworld));
 
         verify(tracker).untrack(cartId, RemovalCause.DESTROYED);
     }
 
     @Test
-    void aCartInAnUnloadingChunkIsUnloaded() {
-        unloading(cart);
-
+    void aLiveCartLeavingTheWorldItIsInIsUnloaded() {
+        // A chunk unloading: a forceload removed, a portal ticket expiring, a player walking away.
+        // No EntitiesUnloadEvent mark is needed, or available: Paper's never reached the removal.
         listener.onEntityRemove(removedFrom(cart, overworld));
 
         verify(tracker).untrack(cartId, RemovalCause.UNLOADED);
     }
 
     @Test
-    void anUnloadMarkIsSpentByTheRemovalItExplains() {
-        // The same cart loads again later and is then broken. The mark from the earlier unload
-        // must not make that look like another unload.
-        unloading(cart);
-        listener.onEntityRemove(removedFrom(cart, overworld));
-
-        listener.onEntityRemove(removedFrom(cart, overworld));
-
-        verify(tracker).untrack(cartId, RemovalCause.UNLOADED);
-        verify(tracker).untrack(cartId, RemovalCause.DESTROYED);
-    }
-
-    @Test
-    void aStaleUnloadMarkIsNotBelieved() {
-        unloading(cart);
-        tick += 21;
-
-        listener.onEntityRemove(removedFrom(cart, overworld));
-
-        verify(tracker).untrack(cartId, RemovalCause.DESTROYED);
-    }
-
-    @Test
-    void aCartAlreadyReportingAnotherWorldChangedDimension() {
-        // CraftBukkit hands the Bukkit entity to the copy on the far side of the portal before the
+    void aLiveCartAlreadyReportingAnotherWorldChangedDimension() {
+        // Paper hands the Bukkit entity to the copy on the far side of the portal before the
         // original is removed, so the cart being removed from the overworld says it is in the nether.
         when(cart.getWorld()).thenReturn(nether);
 
@@ -104,11 +77,18 @@ class ListenerRemovalCauseTest {
     }
 
     @Test
-    void somethingOtherThanACartIsIgnored() {
-        ArmorStand stand = mock(ArmorStand.class);
-        unloading(stand);
+    void aDeadCartIsDestroyedWhateverWorldItReports() {
+        when(cart.isDead()).thenReturn(true);
+        when(cart.getWorld()).thenReturn(nether);
 
-        listener.onEntityRemove(removedFrom(stand, overworld));
+        listener.onEntityRemove(removedFrom(cart, overworld));
+
+        verify(tracker).untrack(cartId, RemovalCause.DESTROYED);
+    }
+
+    @Test
+    void somethingOtherThanACartIsIgnored() {
+        listener.onEntityRemove(removedFrom(mock(ArmorStand.class), overworld));
 
         verify(tracker, never()).untrack(any(), any());
     }
