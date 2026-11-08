@@ -269,11 +269,14 @@ public final class ChunkCartsEngine {
         for (CartView cart : carts) {
             views.put(cart.id(), cart);
         }
+        long now = clock.nowMillis();
         for (Journey journey : List.copyOf(journeys.values())) {
             CartView lead = views.get(journey.lead);
             if (lead == null) {
-                continue;  // its chunk is not loaded, or the caller polls a subset
+                releaseIfLeadLost(journey, now);
+                continue;
             }
+            journey.leadSeenAt = now;
             if (journey.state == JourneyState.HOLDING) {
                 serviceHold(journey, views);
             } else {
@@ -282,6 +285,29 @@ public final class ChunkCartsEngine {
         }
 
         updatePollInterval(carts);
+    }
+
+    /**
+     * Lets go of the region of a journey whose lead has been out of the poll for longer than
+     * {@code pause-tolerance}.
+     *
+     * <p>A lead that unloaded has released the region already. One that changed dimension keeps it,
+     * because it is normally tracked in the destination world within a few ticks and its followers
+     * still need the ground up to the portal. If it is not, the journey would hold that ground for
+     * as long as the server runs: the adapter missed the arrival, or the lead went somewhere it is
+     * never polled. Nothing moves a journey forward without its lead, so after the same tolerance a
+     * stopped lead gets, the region goes, followers in view or not.
+     *
+     * <p>The journey itself stays, exactly as for an unloaded lead. The lead still carries it on the
+     * entity, so ending it here could not write DORMANT to the one cart that matters, and the next
+     * restore would rebuild it anyway. When the lead is tracked again, {@link #restore} rejoins it and
+     * re-holds the region around the lead.
+     */
+    private void releaseIfLeadLost(Journey journey, long now) {
+        if (!journey.held.isEmpty()
+                && now - journey.leadSeenAt >= config.pauseTolerance().toMillis()) {
+            releaseAll(journey);
+        }
     }
 
     /** Every journey holding chunks, including PAUSED and HOLDING ones. */
@@ -405,6 +431,9 @@ public final class ChunkCartsEngine {
         // were watching*; three days of downtime is not that, and without this every restored
         // journey dies on the first poll after boot.
         journey.lastProgressAt = now;
+        if (cart.id().equals(journey.lead)) {
+            journey.leadSeenAt = now;
+        }
         lastTermination.remove(cart.id());
 
         // Add-only: a cluster re-registers one cart at a time as its chunks load, and a full sync
@@ -459,7 +488,8 @@ public final class ChunkCartsEngine {
      * keeping it loaded, so holding the rest of the region would only keep terrain loaded for a
      * cart that is not in it. Restore re-holds the lead's region when it loads. A lead that changed
      * dimension keeps everything: it is in the destination world before the next poll, and its
-     * followers still need the ground between them and the portal.
+     * followers still need the ground between them and the portal. If it is not seen there within
+     * {@code pause-tolerance}, {@link #releaseIfLeadLost} lets the region go.
      */
     private void onCartAway(UUID cartId, RemovalCause cause) {
         UUID journeyId = journeyByCart.get(cartId);

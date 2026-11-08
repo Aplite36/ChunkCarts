@@ -179,6 +179,18 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   journey's chunks but keeps the journey, and resumes it with its train when it loads. A follower
   that unloads stays on the journey and rejoins it when it loads, rather than coming back as a
   journey of its own.
+- On Paper, a cart that comes out of a portal is now picked up on the far side, and a cart whose
+  chunk unloads keeps its journey. The plugin only noticed carts arriving with a chunk load, a
+  dispenser or a placement, and Paper sends none of those for a portal arrival, so a train that
+  crossed was never seen again and its journey held the chunks around the near-side portal until
+  the far side happened to reload. And every chunk unload was taken for the cart being destroyed,
+  so a cart that rolled out of loaded ground lost its journey instead of resuming it when the
+  chunk came back. Fabric, NeoForge and Forge already handled both.
+- A journey whose lead disappears and is not seen again for `pause-tolerance` now lets go of its
+  chunks. A lead that crosses a portal keeps its region while it is expected on the far side, so
+  one the server never handed back on the far side held that ground for as long as the server ran.
+  On Paper that was every portal crossing, until the fix above. The journey is kept on the cart, as for
+  an unloaded one, and resumes with its region when the lead is seen again.
 - `/chunkcarts reload` no longer throws away departure tokens and cooldown waivers. Both lived only
   in memory, and every reload builds a new engine, so a cart that had been seen by a player and was
   waiting out its cooldown lost its token, and a player's right-click no longer waived the cooldown
