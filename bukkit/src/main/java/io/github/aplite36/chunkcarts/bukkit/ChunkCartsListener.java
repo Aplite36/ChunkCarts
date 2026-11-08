@@ -1,11 +1,10 @@
 package io.github.aplite36.chunkcarts.bukkit;
 
+import com.destroystokyo.paper.event.entity.EntityAddToWorldEvent;
 import com.destroystokyo.paper.event.entity.EntityRemoveFromWorldEvent;
 import io.github.aplite36.chunkcarts.core.CartEvent;
 import io.github.aplite36.chunkcarts.core.ChunkCartsEngine;
 import io.github.aplite36.chunkcarts.core.RemovalCause;
-import org.bukkit.Bukkit;
-import org.bukkit.entity.Entity;
 import org.bukkit.entity.Minecart;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
@@ -16,15 +15,7 @@ import org.bukkit.event.inventory.InventoryOpenEvent;
 import org.bukkit.event.player.PlayerInteractEntityEvent;
 import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
-import org.bukkit.event.vehicle.VehicleCreateEvent;
-import org.bukkit.event.world.EntitiesLoadEvent;
-import org.bukkit.event.world.EntitiesUnloadEvent;
 import org.bukkit.inventory.InventoryHolder;
-
-import java.util.HashMap;
-import java.util.Map;
-import java.util.UUID;
-import java.util.function.IntSupplier;
 
 /**
  * Turns server events into the three things {@code core} needs from the outside world: which carts
@@ -36,57 +27,35 @@ import java.util.function.IntSupplier;
  */
 final class ChunkCartsListener implements Listener {
 
-    /**
-     * How long an unload mark is believed. Paper removes a chunk's entities in the same pass that
-     * fires {@link EntitiesUnloadEvent}, so a mark is normally spent within the tick; this only
-     * bounds how long one whose removal never came can sit in the map.
-     */
-    private static final int UNLOAD_MARK_TICKS = 20;
-
     private final ChunkCartsEngine engine;
     private final CartTracker tracker;
 
-    /** Carts whose chunk is unloading, by the server tick it started on. */
-    private final Map<UUID, Integer> unloading = new HashMap<>();
-
-    /** The server tick, read through here so a test can run the unload marks without a server. */
-    private final IntSupplier currentTick;
-
     ChunkCartsListener(ChunkCartsEngine engine, CartTracker tracker) {
-        this(engine, tracker, Bukkit::getCurrentTick);
-    }
-
-    ChunkCartsListener(ChunkCartsEngine engine, CartTracker tracker, IntSupplier currentTick) {
         this.engine = engine;
         this.tracker = tracker;
-        this.currentTick = currentTick;
     }
 
     /**
-     * Re-registers carts as their chunks come back. Entity NBT is the source of truth,
-     * so a cart that was travelling before a restart resumes from its own state rather than from
-     * anything the plugin kept.
+     * Every way a cart comes into a world: its chunk loading, being dispensed, placed or summoned
+     * into a loaded chunk, and arriving through a portal. Entity NBT is the source of truth, so a
+     * cart that was travelling before a restart or a crossing resumes from its own state rather than
+     * from anything the plugin kept.
+     *
+     * <p>The portal arrival is why this is the event and not the ones that came before it. Paper
+     * fires no {@code EntitiesLoadEvent}, {@code VehicleCreateEvent} or {@code EntityPlaceEvent} for
+     * a cart coming out of a portal, only this one, right after the removal from the world it left.
+     * With only those three, a train that crossed was never tracked on the far side and its journey
+     * held the chunks at the near-side portal until the destination chunk happened to reload. This
+     * event also fires for each entity of a loading chunk and for a newly created cart, so it
+     * replaces the load and create handlers rather than adding to them: one path in, not three that
+     * have to agree.
+     *
+     * <p>Present in the 1.21 API this module compiles against and neither removed nor deprecated in
+     * 26.3; see {@link #onEntityRemove} for why that matters.
      */
     @EventHandler(priority = EventPriority.MONITOR)
-    public void onEntitiesLoad(EntitiesLoadEvent event) {
-        for (Entity entity : event.getEntities()) {
-            if (entity instanceof Minecart cart) {
-                tracker.track(cart);
-            }
-        }
-    }
-
-    /**
-     * A cart that came into being in an already-loaded chunk: dispensed, summoned, or placed.
-     *
-     * <p>{@link EntitiesLoadEvent} does not cover this — it fires for chunks arriving, not for
-     * entities appearing in a chunk that is already here. Without this handler a dispenser-fed
-     * station, which is the archetypal ChunkCarts setup, produces carts the plugin cannot see
-     * until something makes their chunk reload.
-     */
-    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
-    public void onVehicleCreate(VehicleCreateEvent event) {
-        if (event.getVehicle() instanceof Minecart cart) {
+    public void onEntityAdd(EntityAddToWorldEvent event) {
+        if (event.getEntity() instanceof Minecart cart) {
             tracker.track(cart);
         }
     }
@@ -100,8 +69,7 @@ final class ChunkCartsListener implements Listener {
      *
      * <p>Without a player the {@code PLACEMENT} record is skipped too, not just the attribution.
      * {@code PLACEMENT} waives the journey cooldown, and a placement nobody performed should not
-     * waive anything. The cart is still tracked, which is what {@link #onVehicleCreate} would have
-     * done for it anyway.
+     * waive anything. The cart is still tracked, which {@link #onEntityAdd} does for it anyway.
      */
     @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
     public void onEntityPlace(EntityPlaceEvent event) {
@@ -116,22 +84,6 @@ final class ChunkCartsListener implements Listener {
     }
 
     /**
-     * Marks the carts in a chunk that is unloading, so {@link #onEntityRemove} can tell them from
-     * destroyed ones. The event fires before the entities are removed, and it is the only signal of
-     * an unload that this API version and every later one both have.
-     */
-    @EventHandler(priority = EventPriority.MONITOR)
-    public void onEntitiesUnload(EntitiesUnloadEvent event) {
-        int now = currentTick.getAsInt();
-        unloading.values().removeIf(tick -> now - tick > UNLOAD_MARK_TICKS);
-        for (Entity entity : event.getEntities()) {
-            if (entity instanceof Minecart cart) {
-                unloading.put(cart.getUniqueId(), now);
-            }
-        }
-    }
-
-    /**
      * Fires for a cart that was destroyed, one whose chunk unloaded, and one that went through a
      * portal. Only the first should end a journey, so the cause is worked out here.
      *
@@ -139,10 +91,7 @@ final class ChunkCartsListener implements Listener {
      * {@code @Deprecated(forRemoval = true)} in the 1.21 API this module compiles against. One jar
      * has to load on every version through 26.3, and registering a handler for a class that has
      * since been deleted fails the whole plugin at enable time, not just this listener. That event
-     * carries a cause and this one does not, so the cause comes from two other places: the unload
-     * mark, and the entity's world. A cart changing dimension has its Bukkit entity handed over to
-     * the copy being added on the far side before the original is removed, so at this point it
-     * already reports the destination world, which is not the world it is being removed from.
+     * carries a cause and this one does not, so the cause is read off the cart itself.
      */
     @EventHandler(priority = EventPriority.MONITOR)
     public void onEntityRemove(EntityRemoveFromWorldEvent event) {
@@ -151,15 +100,28 @@ final class ChunkCartsListener implements Listener {
         }
     }
 
-    private RemovalCause causeOf(Minecart cart, EntityRemoveFromWorldEvent event) {
-        Integer markedAt = unloading.remove(cart.getUniqueId());
-        if (markedAt != null && currentTick.getAsInt() - markedAt <= UNLOAD_MARK_TICKS) {
-            return RemovalCause.UNLOADED;
+    /**
+     * What a live Paper 1.21.11 server reports at the moment of removal. A cart that was killed or
+     * broken is already dead. One going through a portal is not dead, and Paper has handed its Bukkit
+     * entity to the copy on the far side, so it already reports the destination world, which is not
+     * the world it is being removed from. Anything else that leaves alive and in the same world is a
+     * chunk unloading, whether a player walked away, a forceload was removed or a portal ticket ran
+     * out.
+     *
+     * <p>Destroyed is checked first because a dead cart's world says nothing about a portal, and an
+     * unload is the remainder because it is the one cause that leaves no trace on the entity. An
+     * earlier version marked carts from {@code EntitiesUnloadEvent} instead; on Paper that mark was
+     * never present when the removal came, so every unload was reported as a destruction and ended
+     * the journey.
+     */
+    static RemovalCause causeOf(Minecart cart, EntityRemoveFromWorldEvent event) {
+        if (cart.isDead()) {
+            return RemovalCause.DESTROYED;
         }
         if (!cart.getWorld().equals(event.getWorld())) {
             return RemovalCause.CHANGED_DIMENSION;
         }
-        return RemovalCause.DESTROYED;
+        return RemovalCause.UNLOADED;
     }
 
     @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)

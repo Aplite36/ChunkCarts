@@ -227,7 +227,7 @@ public final class ChunkCartsPlugin extends JavaPlugin {
         getServer().getPluginManager().registerEvents(listener, this);
 
         // Carts already sitting in loaded chunks. On a first boot there are none, but on a reload
-        // the world is already populated and EntitiesLoadEvent has long since fired.
+        // the world is already populated and EntityAddToWorldEvent has long since fired.
         for (World world : getServer().getWorlds()) {
             for (Minecart cart : world.getEntitiesByClass(Minecart.class)) {
                 tracker.track(cart);

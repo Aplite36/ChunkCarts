@@ -4,6 +4,7 @@ import io.github.aplite36.chunkcarts.core.fake.FakeCart;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
+import java.time.Duration;
 import java.util.List;
 import java.util.UUID;
 
@@ -172,6 +173,78 @@ class RemovalCauseTest extends EngineTest {
         assertNoJourney(follower);
         assertTerminated(follower, TerminationReason.DROPPED);
         assertEquals(JourneyState.DORMANT, persisted(follower).state());
+        assertEquals(0, tickets.heldCount());
+    }
+
+    // ---- a lead that is never seen again ----------------------------------------------------
+
+    @Test
+    @DisplayName("a lead lost after a portal lets the region go once pause-tolerance has passed")
+    void leadLostAfterPortalReleasesRegion() {
+        cfg.pauseTolerance(Duration.ofSeconds(15));
+        UUID journeyId = departTrain();
+        removeCart(RemovalCause.CHANGED_DIMENSION, lead, follower);
+        int held = tickets.heldCount();
+
+        // The follower is still in view, waiting at the portal. The lead never turns up.
+        clock.advance(Duration.ofSeconds(14));
+        tickPoll(follower);
+        assertEquals(held, tickets.heldCount(), "inside the tolerance the crossing may still land");
+
+        clock.advance(Duration.ofSeconds(1));
+        tickPoll(follower);
+        assertEquals(0, tickets.heldCount(), "past it, nothing is held for a lead nobody can see");
+        assertEquals(1, engine().activeJourneyCount(), "the journey itself is kept, as for an unload");
+        assertEquals(journeyId, journeyOf(follower).journeyId());
+        assertEquals(JourneyState.TRAVELLING, persisted(follower).state());
+        assertTrue(engine().lastTermination(follower.id()).isEmpty(), "nothing ended");
+
+        // The lead is tracked at last, long after. It rejoins and holds ground again.
+        lead.world(NETHER).atChunk(100, 100);
+        engine().restore(lead);
+        assertTrue(tickets.heldCount() > 0, "restore re-holds the region around the lead");
+        lead.atChunk(101, 100);
+        tickPoll(lead);
+        assertEquals(journeyId, journeyOf(lead).journeyId());
+        assertEquals(JourneyState.TRAVELLING, journeyOf(lead).state());
+        assertTrue(tickets.heldCount() > 0, "and keeps it: the lead is in view again");
+    }
+
+    @Test
+    @DisplayName("a crossing tracked within a few ticks never loses its region")
+    void promptCrossingKeepsRegion() {
+        cfg.pauseTolerance(Duration.ofSeconds(15));
+        UUID journeyId = departTrain();
+        removeCart(RemovalCause.CHANGED_DIMENSION, lead, follower);
+        tickPoll(follower);
+
+        lead.world(NETHER).atChunk(100, 100);
+        engine().restore(lead);
+        // Long enough in total that a timer started at the crossing would have fired.
+        for (int i = 0; i < 40; i++) {
+            lead.atChunk(lead.chunkX() + 1, lead.chunkZ());
+            follower.world(NETHER).atBlock(lead.x() - 1, lead.z());
+            tickPoll(lead, follower);
+        }
+
+        assertEquals(journeyId, journeyOf(lead).journeyId());
+        assertEquals(2, journeyOf(lead).cartCount());
+        assertTrue(tickets.heldCount() > 0);
+    }
+
+    @Test
+    @DisplayName("a solitary cart lost after a portal stops holding chunks")
+    void solitaryCartLostAfterPortalReleasesRegion() {
+        cfg.pauseTolerance(Duration.ofSeconds(15));
+        FakeCart cart = FakeCart.at(OVERWORLD, 0, 0);
+        departWithToken(cart);
+        travelStraight(cart, 3);
+        removeCart(RemovalCause.CHANGED_DIMENSION, cart);
+        assertTrue(tickets.heldCount() > 0, "a crossing keeps the region at first");
+
+        clock.advance(Duration.ofSeconds(15));
+        tickPoll();
+
         assertEquals(0, tickets.heldCount());
     }
 }

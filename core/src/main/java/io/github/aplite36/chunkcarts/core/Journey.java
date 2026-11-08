@@ -47,6 +47,13 @@ final class Journey {
     long lastProgressAt;
 
     /**
+     * Epoch millis of the last poll that had the lead in it, or of the lead's restore. Not
+     * persisted. A lead that is not in the poll for longer than {@code pause-tolerance} has its
+     * journey's region released: see {@code ChunkCartsEngine.releaseIfLeadLost}.
+     */
+    long leadSeenAt;
+
+    /**
      * Epoch millis of the last write to the entity. Persisted state is the source of truth, so this
      * bounds how stale it may get between transitions — not itself persisted.
      */
@@ -79,6 +86,7 @@ final class Journey {
         this.state = JourneyState.TRAVELLING;
         this.lastChunk = origin;
         this.lastProgressAt = now;
+        this.leadSeenAt = now;
         this.lastFlushAt = now;
     }
 
