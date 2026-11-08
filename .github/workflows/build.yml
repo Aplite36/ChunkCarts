@@ -58,7 +58,7 @@ jobs:
       scope: ${{ steps.matrix.outputs.scope }}
       version: ${{ steps.version.outputs.version }}
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
 
       - id: matrix
         name: Choose scope
@@ -96,13 +96,16 @@ jobs:
     name: core, metrics and bukkit tests
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-java@v5
+      - uses: actions/setup-java@v6
         with:
           distribution: temurin
           java-version: 21
 
+      # v5, not v6, everywhere in these workflows. v5 already runs on Node 24. v6 moved its caching
+      # into a closed-source component under separate terms of use and defaults to the commercial
+      # provider; moving to it is the owner's call, not a version bump.
       - uses: gradle/actions/setup-gradle@v5
 
       # The core suite is the regression gate for the safety claim. It runs on its own, first, and
@@ -111,10 +114,10 @@ jobs:
       # privacy claim in the README. The bukkit suite covers the Paper command and listener. The
       # `bukkit` job's build would run it too, but only after shadowing a jar; here it fails in the
       # same place as the others and its report lands in the same artifact.
-      - run: ./gradlew :core:test :metrics:test :bukkit:test
+      - run: .github/scripts/gradle_retry.sh :core:test :metrics:test :bukkit:test
 
       - if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: core-test-report
           path: |
@@ -130,10 +133,10 @@ jobs:
     name: loader/common tests (fabric 26.3)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
 
       # 25 for the 26.3 node, 21 for core and metrics, which it builds first.
-      - uses: actions/setup-java@v5
+      - uses: actions/setup-java@v6
         with:
           distribution: temurin
           java-version: |
@@ -142,10 +145,10 @@ jobs:
 
       - uses: gradle/actions/setup-gradle@v5
 
-      - run: ./gradlew :loader:fabric:26.3:test
+      - run: .github/scripts/gradle_retry.sh :loader:fabric:26.3:test
 
       - if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: loader-common-test-report
           path: loader/fabric/versions/26.3/build/reports/tests/test/
@@ -158,7 +161,7 @@ jobs:
     name: shellcheck
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
 
       - run: shellcheck --version && shellcheck .github/scripts/*.sh
 
@@ -167,16 +170,16 @@ jobs:
     runs-on: ubuntu-latest
     needs: plan
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-java@v5
+      - uses: actions/setup-java@v6
         with:
           distribution: temurin
           java-version: 21
 
       - uses: gradle/actions/setup-gradle@v5
 
-      - run: ./gradlew :bukkit:build
+      - run: .github/scripts/gradle_retry.sh :bukkit:build
 
       - name: Verify plugin metadata
         run: |
@@ -184,7 +187,7 @@ jobs:
             --platform bukkit --version '${{ needs.plan.outputs.version }}' \
             bukkit/build/libs/chunkcarts-*+bukkit.jar
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: chunkcarts-bukkit
           path: bukkit/build/libs/chunkcarts-*+bukkit.jar
@@ -200,12 +203,12 @@ jobs:
       fail-fast: false
       matrix: ${{ fromJSON(needs.plan.outputs.matrix) }}
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
 
       # Both toolchains, always. Gradle picks per target — 21 for 1.21.x, 25 for 26.x — by finding
       # the JAVA_HOME_*_X64 variables setup-java exports. Installing only the one this
       # target needs would work until a shared module wanted the other.
-      - uses: actions/setup-java@v5
+      - uses: actions/setup-java@v6
         with:
           distribution: temurin
           java-version: |
@@ -226,7 +229,7 @@ jobs:
       # hits is slower than no cache. modules-2 is the ordinary dependency jars, ~1 GB shared across
       # a loader's targets, and it does hit.
       - name: Cache Gradle dependency jars
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: |
             ~/.gradle/caches/modules-2
@@ -238,8 +241,13 @@ jobs:
       # reason. The local rule is memory (see the buildAll note in loader/stonecutter.gradle.kts);
       # here each job is its own machine, and one target per job is what makes a failure name the
       # version that failed.
+      #
+      # Through gradle_retry.sh, which reruns the build only when it failed fetching something
+      # during setup: ForgeGradle's Mavenizer and NeoForge's NeoForm Runtime download Minecraft in
+      # their own JVMs at configuration time, beyond the reach of Gradle's retry settings. A
+      # compile or test failure still fails on the first attempt; see the header of that script.
       - name: Build
-        run: ./gradlew :loader:${{ matrix.loader }}:${{ matrix.mc }}:build
+        run: .github/scripts/gradle_retry.sh :loader:${{ matrix.loader }}:${{ matrix.mc }}:build
 
       # The gate that compilation does not give you. A jar can build on all fifteen targets and be
       # rejected by the mod loader on all fifteen — that has already happened once here, to the
@@ -251,7 +259,7 @@ jobs:
             --version '${{ needs.plan.outputs.version }}' \
             loader/${{ matrix.loader }}/versions/${{ matrix.mc }}/build/libs/chunkcarts-*.jar
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: chunkcarts-${{ matrix.loader }}-${{ matrix.mc }}
           path: loader/${{ matrix.loader }}/versions/${{ matrix.mc }}/build/libs/chunkcarts-*.jar
@@ -291,14 +299,14 @@ jobs:
       # of pinned downloads in smoke_test.sh, which refuses a version it has none for.
       SMOKE_MC: "1.21.11"
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-java@v5
+      - uses: actions/setup-java@v6
         with:
           distribution: temurin
           java-version: 21
 
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           name: ${{ matrix.artifact }}
           path: jar/
@@ -312,7 +320,7 @@ jobs:
       # Kept on success too. The script surfaces error lines from a passing boot, and the whole
       # log is the only way to tell a benign headless-runner complaint from a real one.
       - if: ${{ !cancelled() }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: smoke-log-${{ matrix.loader }}
           path: smoke/logs/
