@@ -191,6 +191,10 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   one the server never handed back on the far side held that ground for as long as the server ran.
   On Paper that was every portal crossing, until the fix above. The journey is kept on the cart, as for
   an unloaded one, and resumes with its region when the lead is seen again.
+- A train whose lead is not at the front no longer loses its front carts at a portal. A cart that
+  went through ahead of the lead was measured against a lead still on the near side, taken for a
+  drifter and stopped in the nether, unless the lead happened to follow before the next poll. It is
+  now kept while the lead stays by the portal, and dropped only if the lead turns away instead.
 - `/chunkcarts reload` no longer throws away departure tokens and cooldown waivers. Both lived only
   in memory, and every reload builds a new engine, so a cart that had been seen by a player and was
   waiting out its cooldown lost its token, and a player's right-click no longer waived the cooldown

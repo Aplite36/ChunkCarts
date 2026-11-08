@@ -1,6 +1,8 @@
 package io.github.aplite36.chunkcarts.core;
 
+import java.util.HashMap;
 import java.util.LinkedHashSet;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 
@@ -39,6 +41,14 @@ final class Journey {
      * cluster from whichever carts come back, and the leash then drops the ones left behind.
      */
     ChunkPos portalEntry;
+
+    /**
+     * Followers that went through a portal before the lead, each with the lead's chunk at the first
+     * poll that saw it on the far side. The lead is right behind such a follower, so that chunk is
+     * next to the portal, and the follower is kept while the lead stays within the leash of it. Not
+     * persisted, for the same reason as {@link #portalEntry}.
+     */
+    final Map<UUID, ChunkPos> crossedAhead = new HashMap<>();
 
     /**
      * Epoch millis of the last chunk change. <strong>Never persisted</strong> and reset to now on

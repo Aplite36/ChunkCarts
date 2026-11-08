@@ -247,4 +247,76 @@ class RemovalCauseTest extends EngineTest {
 
         assertEquals(0, tickets.heldCount());
     }
+
+    // ---- a follower that crosses first ----------------------------------------------------------
+
+    /** A two-cart train with the lead at the rear, three chunks into its journey along +X. */
+    private UUID departTrainLeadAtRear() {
+        cfg.regionRadius(1);
+        lead = FakeCart.at(OVERWORLD, 0, 0).atBlock(8, 8);
+        follower = new FakeCart(OVERWORLD).atBlock(9, 8);
+        grantToken(lead);
+        UUID journeyId = assertDeparted(engine().tryDepart(lead, List.of(lead, follower)));
+        for (int i = 0; i < 3; i++) {
+            lead.atChunk(lead.chunkX() + 1, lead.chunkZ());
+            follower.atBlock(lead.x() + 1, lead.z());
+            tickPoll(lead, follower);
+        }
+        return journeyId;
+    }
+
+    @Test
+    @DisplayName("a follower that crosses a portal before its lead stays on the journey")
+    void followerCrossingFirstIsKept() {
+        UUID journeyId = departTrainLeadAtRear();
+
+        // The front cart goes through and a poll lands before the lead follows it.
+        removeCart(RemovalCause.CHANGED_DIMENSION, follower, lead);
+        follower.world(NETHER).atChunk(100, 100);
+        engine().restore(follower);
+        tickPoll(lead, follower);
+
+        assertEquals(journeyId, journeyOf(follower).journeyId(), "not a drifter: the lead is right behind");
+        assertTrue(engine().lastTermination(follower.id()).isEmpty());
+        assertEquals(JourneyState.TRAVELLING, persisted(follower).state());
+
+        // The lead moves up to the portal, still on the near side, and the poll after that crosses.
+        lead.atBlock(lead.x() + 1, lead.z());
+        tickPoll(lead, follower);
+        assertEquals(2, journeyOf(lead).cartCount());
+
+        removeCart(RemovalCause.CHANGED_DIMENSION, lead, follower);
+        lead.world(NETHER).atBlock(follower.x() - 1, follower.z());
+        engine().restore(lead);
+        tickPoll(lead, follower);
+
+        assertEquals(journeyId, journeyOf(lead).journeyId());
+        assertEquals(2, journeyOf(lead).cartCount(), "the whole train made it through");
+        assertEquals(1, journeyOf(lead).dimensionTransitionsUsed());
+
+        // Together again on the far side, the ordinary leash applies.
+        follower.atChunk(follower.chunkX() + 10, follower.chunkZ());
+        tickPoll(lead, follower);
+        assertNoJourney(follower);
+        assertTerminated(follower, TerminationReason.DROPPED);
+    }
+
+    @Test
+    @DisplayName("a follower ahead through a portal is dropped if the lead turns away instead")
+    void followerAheadDroppedWhenLeadTurnsAway() {
+        departTrainLeadAtRear();
+        removeCart(RemovalCause.CHANGED_DIMENSION, follower, lead);
+        follower.world(NETHER).atChunk(100, 100);
+        engine().restore(follower);
+        tickPoll(lead, follower);
+
+        // The lead reverses away from the portal along the track it came in on.
+        lead.atChunk(lead.chunkX() - 2, lead.chunkZ());
+        tickPoll(lead, follower);
+
+        assertNoJourney(follower);
+        assertTerminated(follower, TerminationReason.DROPPED);
+        assertEquals(JourneyState.DORMANT, persisted(follower).state());
+        assertEquals(1, journeyOf(lead).cartCount());
+    }
 }
