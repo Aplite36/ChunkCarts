@@ -17,6 +17,12 @@ import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.inventory.InventoryHolder;
 
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.UUID;
+import java.util.function.Consumer;
+
 /**
  * Turns server events into the three things {@code core} needs from the outside world: which carts
  * exist, what players did to them, and whether anyone is online.
@@ -30,9 +36,28 @@ final class ChunkCartsListener implements Listener {
     private final ChunkCartsEngine engine;
     private final CartTracker tracker;
 
-    ChunkCartsListener(ChunkCartsEngine engine, CartTracker tracker) {
+    /** Runs a task on the main thread at the start of the next tick. */
+    private final Consumer<Runnable> nextTick;
+
+    /** Carts added to a world this tick, waiting to be tracked. Keyed so a re-add is one entry. */
+    private final Map<UUID, Minecart> arrived = new LinkedHashMap<>();
+
+    private boolean closed;
+
+    ChunkCartsListener(ChunkCartsEngine engine, CartTracker tracker, Consumer<Runnable> nextTick) {
         this.engine = engine;
         this.tracker = tracker;
+        this.nextTick = nextTick;
+    }
+
+    /**
+     * Stops tracking anything still queued. Called before the engine shuts down: a queued cart
+     * tracked after that would restore its journey into an engine nobody polls or releases, and
+     * hold chunks until the server restarts.
+     */
+    void close() {
+        closed = true;
+        arrived.clear();
     }
 
     /**
@@ -44,19 +69,47 @@ final class ChunkCartsListener implements Listener {
      * <p>The portal arrival is why this is the event and not the ones that came before it. Paper
      * fires no {@code EntitiesLoadEvent}, {@code VehicleCreateEvent} or {@code EntityPlaceEvent} for
      * a cart coming out of a portal, only this one, right after the removal from the world it left.
-     * With only those three, a train that crossed was never tracked on the far side and its journey
-     * held the chunks at the near-side portal until the destination chunk happened to reload. This
-     * event also fires for each entity of a loading chunk and for a newly created cart, so it
-     * replaces the load and create handlers rather than adding to them: one path in, not three that
-     * have to agree.
+     * This event also fires for each entity of a loading chunk and for a newly created cart, so it
+     * replaces the load and create handlers rather than adding to them.
+     *
+     * <p>The cart is tracked on the next tick, never here. Paper fires this from inside the entity
+     * manager's update, where a ticket change throws {@code IllegalStateException: Cannot update
+     * ticket level while unloading chunks or updating entity manager}. Tracking a cart restores its
+     * journey, restoring holds its region, and adding a plugin ticket loads the chunk synchronously
+     * inside CraftBukkit, so tracking in place threw for every travelling cart that arrived through a
+     * portal or loaded with its chunk. Live on Paper 1.21.11 and 26.3.
      *
      * <p>Present in the 1.21 API this module compiles against and neither removed nor deprecated in
      * 26.3; see {@link #onEntityRemove} for why that matters.
      */
     @EventHandler(priority = EventPriority.MONITOR)
     public void onEntityAdd(EntityAddToWorldEvent event) {
-        if (event.getEntity() instanceof Minecart cart) {
-            tracker.track(cart);
+        if (closed || !(event.getEntity() instanceof Minecart cart)) {
+            return;
+        }
+        boolean firstThisTick = arrived.isEmpty();
+        arrived.put(cart.getUniqueId(), cart);
+        if (firstThisTick) {
+            nextTick.accept(this::trackArrived);
+        }
+    }
+
+    /**
+     * Tracks what arrived since the last run. A cart that was removed again in the meantime is no
+     * longer valid and is skipped: its chunk unloaded or it was destroyed, and either way the
+     * removal handler has already dealt with it. One that changed world again is still valid, and
+     * is tracked where it is now.
+     */
+    private void trackArrived() {
+        if (closed) {
+            return;
+        }
+        List<Minecart> carts = List.copyOf(arrived.values());
+        arrived.clear();
+        for (Minecart cart : carts) {
+            if (cart.isValid()) {
+                tracker.track(cart);
+            }
         }
     }
 
