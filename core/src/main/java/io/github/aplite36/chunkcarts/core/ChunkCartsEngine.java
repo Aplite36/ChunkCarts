@@ -522,6 +522,7 @@ public final class ChunkCartsEngine {
                     // the next syncRegion lets them go along with everything else the cluster no
                     // longer needs.
                     journey.members.remove(cartId);
+                    journey.crossedAhead.remove(cartId);
                     journeyByCart.remove(cartId);
                 } else {
                     // Losing the lead ends the journey for the whole cluster, and ending it has to
@@ -794,21 +795,32 @@ public final class ChunkCartsEngine {
                 continue;
             }
             boolean drifted;
+            ChunkPos entry = journey.portalEntry;
             if (member.world().equals(lead.world())) {
+                journey.crossedAhead.remove(memberId);
                 drifted = chunkOf(member).chebyshevTo(leadChunk) > config.regionRadius();
-            } else {
+            } else if (entry != null && member.world().equals(entry.world())) {
                 // Still on the near side of the portal the lead went through. A train crosses one
                 // cart at a time, so for a poll or two after the lead is through the rest of it is
                 // here, and measured against the lead it would all count as drifted. It is held to
                 // where the lead left instead, which still drops a cart that wanders off.
-                ChunkPos entry = journey.portalEntry;
-                drifted = entry == null || !member.world().equals(entry.world())
-                        || chunkOf(member).chebyshevTo(entry) > config.regionRadius();
+                drifted = chunkOf(member).chebyshevTo(entry) > config.regionRadius();
+            } else {
+                // Through a portal ahead of the lead: the lead is the rear cart, or the train
+                // reached the portal front first. The lead is a cart or two behind and crosses next,
+                // and then this follower is in its world and measured against it as usual. Until
+                // then it is the lead that is held, to the chunk it was in when the follower was first
+                // seen across, which is next to the portal. A lead that turns away from the portal
+                // instead leaves the leash, and the follower is dropped.
+                ChunkPos anchor = journey.crossedAhead.computeIfAbsent(memberId, id -> leadChunk);
+                drifted = !anchor.world().equals(lead.world())
+                        || leadChunk.chebyshevTo(anchor) > config.regionRadius();
             }
             if (!drifted) {
                 continue;
             }
             journey.members.remove(memberId);
+            journey.crossedAhead.remove(memberId);
             journeyByCart.remove(memberId);
             // Terminated individually and immediately, so the chunks it dragged along are released
             // rather than left held by the cluster it left. A shunt onto a siding stays well inside

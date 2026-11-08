@@ -26,7 +26,7 @@ class ChunkCartsListenerTest {
 
     private final ChunkCartsEngine engine = mock(ChunkCartsEngine.class);
     private final CartTracker tracker = mock(CartTracker.class);
-    private final ChunkCartsListener listener = new ChunkCartsListener(engine, tracker);
+    private final ChunkCartsListener listener = new ChunkCartsListener(engine, tracker, task -> { });
 
     private final UUID cartId = UUID.randomUUID();
     private final Minecart cart = mock(Minecart.class);

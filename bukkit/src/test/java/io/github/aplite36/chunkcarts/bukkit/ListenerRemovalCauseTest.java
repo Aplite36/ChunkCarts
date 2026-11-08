@@ -27,7 +27,7 @@ class ListenerRemovalCauseTest {
 
     private final CartTracker tracker = mock(CartTracker.class);
     private final ChunkCartsListener listener =
-            new ChunkCartsListener(mock(ChunkCartsEngine.class), tracker);
+            new ChunkCartsListener(mock(ChunkCartsEngine.class), tracker, task -> { });
 
     private final World overworld = mock(World.class);
     private final World nether = mock(World.class);

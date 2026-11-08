@@ -223,7 +223,8 @@ public final class ChunkCartsPlugin extends JavaPlugin {
         engine.setPlayersOnline(!getServer().getOnlinePlayers().isEmpty());
 
         tracker = new CartTracker(engine, getServer(), stateKey, getLogger());
-        listener = new ChunkCartsListener(engine, tracker);
+        listener = new ChunkCartsListener(engine, tracker,
+                task -> getServer().getScheduler().runTask(this, task));
         getServer().getPluginManager().registerEvents(listener, this);
 
         // Carts already sitting in loaded chunks. On a first boot there are none, but on a reload
@@ -274,6 +275,7 @@ public final class ChunkCartsPlugin extends JavaPlugin {
             }
             if (listener != null) {
                 HandlerList.unregisterAll(listener);
+                listener.close();
             }
             if (engine != null) {
                 // Releases every ticket and sweeps for anything we lost track of. Without this,
