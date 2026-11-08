@@ -75,6 +75,17 @@ SERVER="$ROOT/smoke/$LOADER"
 LOGS="$ROOT/smoke/logs"
 mkdir -p "$SERVER" "$LOGS"
 
+# Downloads are setup, not the thing under test: a stalled mirror should cost a retry, not a red
+# job. --retry-all-errors also retries an HTTP error such as a 404, which only delays the same
+# failure by a few seconds; the checksum after each download still decides what is accepted.
+CURL=(curl -fsSL --retry 4 --retry-all-errors --retry-delay 5 --connect-timeout 30)
+
+# The same rule for the Forge-family installers, which download Minecraft and its libraries with
+# their own HTTP client: rerun one only if its log shows a network failure. 2026-10-30 had a
+# NeoForge installer give up on a read timeout from piston-meta.mojang.com six seconds in.
+INSTALL_ATTEMPTS=3
+NETWORK_RE='java\.net\.(http\.Http(Connect)?TimeoutException|SocketTimeoutException|ConnectException|UnknownHostException|NoRouteToHostException|SocketException)|javax\.net\.ssl\.SSL(Handshake)?Exception|Connection reset|Read timed out|Connect timed out'
+
 say() { printf '\n=== %s\n' "$*"; }
 
 jar_path() {
@@ -87,7 +98,7 @@ jar_path() {
 install_fabric() {
     # The meta service serves a ready-made launcher for a (game, loader, installer) triple, so
     # there is no installer jar to run and no network access needed at boot beyond libraries.
-    curl -fsSL -o "$SERVER/fabric-server-launch.jar" \
+    "${CURL[@]}" -o "$SERVER/fabric-server-launch.jar" \
         "https://meta.fabricmc.net/v2/versions/loader/$MC/$FABRIC_LOADER/$FABRIC_INSTALLER/server/jar"
     echo "$FABRIC_LAUNCHER_SHA256  $SERVER/fabric-server-launch.jar" | sha256sum -c - \
         || { echo "fabric-server-launch.jar does not match the pinned FABRIC_LAUNCHER_SHA256" >&2; exit 1; }
@@ -99,7 +110,7 @@ install_fabric() {
     # quoted in the same response that named the file is the same claim twice, not a check — the
     # value worth verifying against is the one pinned below, computed independently ahead of time.
     local url
-    url=$(curl -fsSL "https://api.modrinth.com/v2/project/fabric-api/version?game_versions=%5B%22$MC%22%5D&loaders=%5B%22fabric%22%5D" \
+    url=$("${CURL[@]}" "https://api.modrinth.com/v2/project/fabric-api/version?game_versions=%5B%22$MC%22%5D&loaders=%5B%22fabric%22%5D" \
         | python3 -c '
 import json, sys
 versions = json.load(sys.stdin)
@@ -110,7 +121,7 @@ for version in versions:
 else:
     sys.exit(f"fabric-api {wanted} not published for this game version")
 ' "$FABRIC_API")
-    curl -fsSL -o "$SERVER/mods/fabric-api.jar" --create-dirs "$url"
+    "${CURL[@]}" -o "$SERVER/mods/fabric-api.jar" --create-dirs "$url"
     echo "$FABRIC_API_SHA256  $SERVER/mods/fabric-api.jar" | sha256sum -c - \
         || { echo "fabric-api.jar $FABRIC_API does not match the pinned FABRIC_API_SHA256" >&2; exit 1; }
 
@@ -121,7 +132,7 @@ install_paper() {
     # The fill API returns builds newest-first as a JSON array, keyed by MC version rather than by
     # build number, so the pinned build has to be found in the list rather than addressed directly.
     local url
-    url=$(curl -fsSL "https://fill.papermc.io/v3/projects/paper/versions/$MC/builds" \
+    url=$("${CURL[@]}" "https://fill.papermc.io/v3/projects/paper/versions/$MC/builds" \
         | python3 -c '
 import json, sys
 builds = json.load(sys.stdin)
@@ -133,7 +144,7 @@ else:
     sys.exit(f"paper build {wanted} not published for {sys.argv[2]}")
 ' "$PAPER_BUILD" "$MC")
 
-    curl -fsSL -o "$SERVER/paper.jar" "$url"
+    "${CURL[@]}" -o "$SERVER/paper.jar" "$url"
     # Checked against the constant above, not against whatever checksum the API happened to hand
     # back alongside the URL — the point of pinning is a value that lives in this file, not one
     # that travels with the download it is meant to be checking.
@@ -159,14 +170,24 @@ install_forge_family() {
         sha256="$FORGE_SHA256"
     fi
 
-    curl -fsSL -o "$SERVER/installer.jar" "$url"
+    "${CURL[@]}" -o "$SERVER/installer.jar" "$url"
     # Checked before the installer is ever executed: this is the one artifact in the script that
     # runs as code rather than sitting on disk to be loaded, so an unverified download here would
     # be an unverified program run with the runner's own privileges.
     echo "$sha256  $SERVER/installer.jar" | sha256sum -c - \
         || { echo "installer.jar for $LOADER $ver does not match the pinned checksum" >&2; exit 1; }
-    ( cd "$SERVER" && java -jar installer.jar --installServer ) > "$LOGS/$LOADER-install.log" 2>&1 \
-        || { echo "installer failed; see $LOGS/$LOADER-install.log" >&2; tail -n 40 "$LOGS/$LOADER-install.log" >&2; exit 1; }
+    local attempt=1
+    until ( cd "$SERVER" && java -jar installer.jar --installServer ) > "$LOGS/$LOADER-install.log" 2>&1; do
+        echo "installer failed; see $LOGS/$LOADER-install.log" >&2
+        tail -n 40 "$LOGS/$LOADER-install.log" >&2
+        if [ "$attempt" -ge "$INSTALL_ATTEMPTS" ] || ! grep -Eq "$NETWORK_RE" "$LOGS/$LOADER-install.log"; then
+            exit 1
+        fi
+        echo "::warning title=Installer retry::$LOADER installer hit a network error on attempt $attempt/$INSTALL_ATTEMPTS; retrying in 30s"
+        cp "$LOGS/$LOADER-install.log" "$LOGS/$LOADER-install.attempt$attempt.log"
+        sleep 30
+        attempt=$((attempt + 1))
+    done
 
     # Both loaders boot through an argument file the installer writes. Its path embeds the loader
     # version, so assert it exists rather than discovering it missing as an unreadable Java error.
