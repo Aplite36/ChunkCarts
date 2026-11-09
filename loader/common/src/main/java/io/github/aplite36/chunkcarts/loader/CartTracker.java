@@ -97,11 +97,18 @@ public final class CartTracker {
 
     /**
      * Read through {@code shouldDestroy()} rather than by constant, so a reason a later version adds
-     * still lands on the right side. A cart with no reason at all is treated as destroyed, which is
-     * what every removal meant before causes were passed on.
+     * still lands on the right side.
+     *
+     * <p>No reason at all means the cart's chunk is unloading. The level stops tracking the entities
+     * in a chunk as soon as it drops below full status, and the leave event fires then, a tick or
+     * more before the unload sets {@code UNLOADED_TO_CHUNK}. Fabric, NeoForge and Forge all fire
+     * from that point. Destroying a cart always sets a reason first, so a null cannot be one.
      */
     static RemovalCause causeOf(Entity.RemovalReason reason) {
-        if (reason == null || reason.shouldDestroy()) {
+        if (reason == null) {
+            return RemovalCause.UNLOADED;
+        }
+        if (reason.shouldDestroy()) {
             return RemovalCause.DESTROYED;
         }
         return reason == Entity.RemovalReason.CHANGED_DIMENSION

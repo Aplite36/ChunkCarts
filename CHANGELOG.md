@@ -92,6 +92,10 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - On Paper, a cart that comes out of a portal is now tracked on the far side, and a cart whose
   chunk unloads keeps its journey. Before, a train that crossed a portal was never seen again, and
   every chunk unload counted as the cart being destroyed.
+- On Fabric, NeoForge and Forge, a cart whose chunk unloads no longer counts as destroyed. The
+  game stops tracking a chunk's carts before it marks them unloaded, and the mod took a cart with
+  no reason given for a destroyed one. So the train behaviour above did not hold for unloads on
+  these platforms: a train member whose chunk unloaded lost its journey instead of rejoining it.
 - An error inside the travel loop no longer crashes a Fabric, NeoForge or Forge server. It is
   logged, repeats are throttled, and the loop keeps running so held chunks still get released.
   Paper already survived this.
