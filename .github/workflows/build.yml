@@ -206,24 +206,34 @@ jobs:
       - uses: actions/checkout@v7
 
       # Forge only: a JDK 8 for Minecraft Mavenizer, which ForgeGradle 7 runs at configuration time.
-      # Its srg2names step runs a Java 8 tool, and without a local JDK 8 Mavenizer downloads
-      # Temurin 8 from GitHub releases on every cold job, through a client with a 5-second request
-      # timeout that saves the body of any response other than 301/302/404 as the file. On a full
-      # run that failed most forge jobs: `HttpTimeoutException: request timed out`, or
-      # `sha256 Invalid` when the saved bytes were not the tarball.
+      # Without one, Mavenizer downloads Temurin 8 itself on every cold job through a client that
+      # times out after five seconds and saves error responses as the archive, which failed most
+      # forge jobs on a full run. provision_jdk8.sh says why, and why this is not setup-java. It
+      # exports JAVA_HOME_8_X64, which Mavenizer checks before downloading anything.
       #
-      # Mavenizer looks for an installed JDK before it downloads one, and the first place it looks
-      # is the JAVA_HOME_<n>_X64 variables, so the JAVA_HOME_8_X64 this step exports is enough.
-      # It cannot be told through Gradle: ForgeGradle starts Mavenizer with no JVM arguments, so
-      # org.gradle.java.installations.* never reaches it. Temurin 8 is in the runner image's tool
-      # cache, so this step downloads nothing either. It runs before the 21/25 step, which
-      # therefore still sets JAVA_HOME. "Check Mavenizer used the local JDK" below says so if
-      # Mavenizer downloads a JDK anyway.
-      - if: matrix.loader == 'forge'
-        uses: actions/setup-java@v6
+      # The archive is cached under a key that is its pinned sha256, so changing the pin starts a
+      # new entry. Every forge job restores it. Only forge 1.21.11, which every scope builds, saves
+      # it, so fifteen jobs that missed together do not race to write the same entry. The script
+      # checks the sha256 whichever way the archive arrived. "Check Mavenizer used the local JDK"
+      # below warns if Mavenizer downloads a JDK anyway.
+      - name: Restore the JDK 8 archive
+        id: jdk8-cache
+        if: matrix.loader == 'forge'
+        uses: actions/cache/restore@v6
         with:
-          distribution: temurin
-          java-version: 8
+          path: ~/.cache/chunkcarts-jdk8
+          key: jdk8-fb3bfa869012419b562bb4235d0d83ec4f8c1dda62ae432ba20c6c3a7e43f7e4
+
+      - name: Install JDK 8 for Mavenizer
+        if: matrix.loader == 'forge'
+        run: .github/scripts/provision_jdk8.sh ~/.cache/chunkcarts-jdk8
+
+      - name: Save the JDK 8 archive
+        if: matrix.loader == 'forge' && matrix.mc == '1.21.11' && steps.jdk8-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v6
+        with:
+          path: ~/.cache/chunkcarts-jdk8
+          key: jdk8-fb3bfa869012419b562bb4235d0d83ec4f8c1dda62ae432ba20c6c3a7e43f7e4
 
       # Both toolchains, always. Gradle picks per target — 21 for 1.21.x, 25 for 26.x — by finding
       # the JAVA_HOME_*_X64 variables setup-java exports. Installing only the one this
