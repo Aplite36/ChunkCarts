@@ -77,8 +77,9 @@ mkdir -p "$SERVER" "$LOGS"
 
 # Downloads are setup, not the thing under test: a stalled mirror should cost a retry, not a red
 # job. --retry-all-errors also retries an HTTP error such as a 404, which only delays the same
-# failure by a few seconds; the checksum after each download still decides what is accepted.
-CURL=(curl -fsSL --retry 4 --retry-all-errors --retry-delay 5 --connect-timeout 30)
+# failure; the checksum after each download still decides what is accepted. With no --retry-delay
+# curl backs off exponentially, about four minutes in all, so a short outage is waited out.
+CURL=(curl -fsSL --retry 8 --retry-all-errors --retry-max-time 600 --connect-timeout 30)
 
 # The same rule for the Forge-family installers, which download Minecraft and its libraries with
 # their own HTTP client: rerun one only if its log shows a network failure. 2026-10-30 had a
