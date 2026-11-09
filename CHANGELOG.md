@@ -201,6 +201,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   for the next dispatch. Both are now written to the cart when they are granted, and the reload
   reads them back along with running journeys, which already survived it. The same write keeps a
   token when a waiting cart's chunk unloads, or the server restarts, before it departs.
+- On Fabric, NeoForge and Forge, a cart whose chunk unloads is no longer counted as destroyed. The
+  level stops tracking a chunk's entities before it sets their unload reason, so the mod saw a cart
+  with no reason at all and took it for destroyed. A train member in that state lost its journey
+  instead of rejoining it when the chunk loaded again, which the fix for portals and unloads above
+  promised. Destroying a cart always sets a reason, so a cart without one now counts as unloaded.
 
 ## [0.1.0] - 2026-07-27
 
