@@ -205,6 +205,26 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
+      # Forge only: a JDK 8 for Minecraft Mavenizer, which ForgeGradle 7 runs at configuration time.
+      # Its srg2names step runs a Java 8 tool, and without a local JDK 8 Mavenizer downloads
+      # Temurin 8 from GitHub releases on every cold job, through a client with a 5-second request
+      # timeout that saves the body of any response other than 301/302/404 as the file. On a full
+      # run that failed most forge jobs: `HttpTimeoutException: request timed out`, or
+      # `sha256 Invalid` when the saved bytes were not the tarball.
+      #
+      # Mavenizer looks for an installed JDK before it downloads one, and the first place it looks
+      # is the JAVA_HOME_<n>_X64 variables, so the JAVA_HOME_8_X64 this step exports is enough.
+      # It cannot be told through Gradle: ForgeGradle starts Mavenizer with no JVM arguments, so
+      # org.gradle.java.installations.* never reaches it. Temurin 8 is in the runner image's tool
+      # cache, so this step downloads nothing either. It runs before the 21/25 step, which
+      # therefore still sets JAVA_HOME. "Check Mavenizer used the local JDK" below says so if
+      # Mavenizer downloads a JDK anyway.
+      - if: matrix.loader == 'forge'
+        uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: 8
+
       # Both toolchains, always. Gradle picks per target — 21 for 1.21.x, 25 for 26.x — by finding
       # the JAVA_HOME_*_X64 variables setup-java exports. Installing only the one this
       # target needs would work until a shared module wanted the other.
@@ -248,6 +268,25 @@ jobs:
       # compile or test failure still fails on the first attempt; see the header of that script.
       - name: Build
         run: .github/scripts/gradle_retry.sh :loader:${{ matrix.loader }}:${{ matrix.mc }}:build
+
+      # Evidence that the JDK 8 step above did its job. Mavenizer writes the Disco package list
+      # (packages.json) and the JDK archive into its cache only when it falls back to downloading
+      # a JDK, and that cache is never restored from the Actions cache, so either file here means
+      # this job fetched a JDK over the network. A warning rather than a failure: the build itself
+      # verified the download and passed, and what this flags is a slower, flakier path coming
+      # back (a newer Mavenizer wanting a JDK version not installed here, say), not a broken jar.
+      - name: Check Mavenizer used the local JDK
+        if: ${{ !cancelled() && matrix.loader == 'forge' }}
+        run: |
+          cache="$HOME/.gradle/caches/minecraftforge/forgegradle/mavenizer/caches"
+          fetched=$(find "$cache" -maxdepth 1 \( -name packages.json -o -name '*jdk*.tar.gz' -o -name '*jdk*.zip' \) -printf '%f\n' 2>/dev/null || true)
+          if [ -n "$fetched" ]; then
+            msg="Mavenizer downloaded a JDK instead of using an installed one: $(echo "$fetched" | paste -sd ' ')"
+            echo "::warning title=Mavenizer JDK download::$msg"
+            echo "- :warning: $msg" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "Mavenizer downloaded no JDK."
+          fi
 
       # The gate that compilation does not give you. A jar can build on all fifteen targets and be
       # rejected by the mod loader on all fifteen — that has already happened once here, to the
