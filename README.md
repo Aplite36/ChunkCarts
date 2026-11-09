@@ -91,6 +91,10 @@ In `STRICT` mode the abusable settings are clamped to sane ceilings rather than 
 deliberate: `STRICT` is a promise about behaviour, so it cannot also be a set of dials that quietly
 undo the promise.
 
+Values that cannot work at all are raised to a minimum in both modes, such as a `region-radius` or
+`max-concurrent-journeys` of 0. Every clamp logs a warning naming the key, and `/chunkcarts reload`
+shows those warnings to whoever ran it.
+
 ---
 
 ## Commands
@@ -99,8 +103,8 @@ One permission, `chunkcarts.admin`, which operators have by default. `/ccarts` w
 
 | Command | What it does |
 | --- | --- |
-| `/chunkcarts list` | Active journeys, and exactly which chunks are held and why. In game, click a row to teleport to it |
-| `/chunkcarts reload` | Re-read `config.yml`; running journeys are not interrupted |
+| `/chunkcarts list` | Active journeys, and exactly which chunks are held and why. In game, click a row to teleport to it, if you are allowed to use `/tp` |
+| `/chunkcarts reload` | Re-read `config.yml`; running journeys are not interrupted. If the file cannot be read, the settings already in force stay, and the reply says so |
 | `/chunkcarts debug` | Toggle per-poll logging, so you can watch a journey decide |
 | `/chunkcarts why` | Run in game, looking at a cart: why it stopped, or why it will not depart |
 | `/chunkcarts help` | List the subcommands and what each one is for |
@@ -227,13 +231,13 @@ one reason — deciding which platforms and game versions are worth carrying, an
 actually uses permissive mode, from evidence instead of guesswork.
 
 The server software sent is the brand the server gives itself, the same name its clients see. On
-Paper and on a plain Fabric, NeoForge or Forge server that is just the platform's name; a hybrid
-server running a loader jar reports its own name instead.
+Paper and on a plain Fabric, NeoForge or Forge server that is just the platform's name; a Paper
+fork or a hybrid server running a loader jar reports its own name instead.
 
 bStats' own Server Software chart only recognises Bukkit-family names, so a Fabric, NeoForge or
-Forge server renders there as "Unknown". ChunkCarts reports a second `platform` chart naming which
-ChunkCarts jar is running (Paper, Fabric, NeoForge or Forge), so those installs show up correctly
-somewhere on the dashboard.
+Forge server renders there as "Unknown". ChunkCarts reports its own `platform` chart, so those
+installs show up correctly somewhere on the dashboard. On the mod loaders it names the loader the
+jar was built for, even on a hybrid server. On Paper it carries the same server name as above.
 
 Set `metrics: false` to opt out, or disable bStats globally on your server.
 
