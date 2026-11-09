@@ -33,8 +33,11 @@ class CartTrackerRemovalCauseTest {
     }
 
     @Test
-    void noReasonAtAllIsTreatedAsDestroyed() {
-        assertEquals(RemovalCause.DESTROYED, CartTracker.causeOf(null));
+    void noReasonYetIsAChunkUnloadingNotADestruction() {
+        // What the leave event carries for a cart whose chunk is unloading: the level stops
+        // tracking it before the unload sets UNLOADED_TO_CHUNK. Seen live on NeoForge and Forge,
+        // 1.21.1 and 26.3, for every cart left behind when a forceload was removed.
+        assertEquals(RemovalCause.UNLOADED, CartTracker.causeOf(null));
     }
 
     @Test
