@@ -49,7 +49,9 @@ else
     # fetched and fails the check stops the job.
     rm -f "$tarball"
     echo "Downloading $URL"
-    curl -fsSL --retry 4 --retry-all-errors --retry-delay 5 --connect-timeout 30 -o "$tarball" "$URL"
+    # No --retry-delay, so curl backs off exponentially (1s, 2s, 4s ... about four minutes in all).
+    # GitHub's release downloads have answered 504 for longer than a fixed 5s delay outlasts.
+    curl -fsSL --retry 8 --retry-all-errors --retry-max-time 600 --connect-timeout 30 -o "$tarball" "$URL"
     verified || {
         echo "::error title=JDK 8 checksum::$ARCHIVE does not match the pinned sha256 ($(sha256sum "$tarball" | cut -d' ' -f1))"
         exit 1
